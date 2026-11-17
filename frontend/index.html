@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小市值策略研究工作台</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            margin-bottom: 30px;
+            border-radius: 8px;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .status-banner {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            color: #856404;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .card h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: #2980b9;
+        }
+
+        button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .metric {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #3498db;
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .metric-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .info-box {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 4px;
+        }
+
+        .info-box h3 {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #1565c0;
+        }
+
+        .info-box ul {
+            margin-left: 20px;
+            font-size: 13px;
+            color: #424242;
+        }
+
+        .info-box li {
+            margin-bottom: 4px;
+        }
+
+        #result {
+            display: none;
+        }
+
+        .warning {
+            color: #d32f2f;
+            font-weight: bold;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 13px;
+        }
+
+        /* 图表容器样式 */
+        .chart-container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .chart-title {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+
+        /* 表格样式 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        table thead tr {
+            background: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        table th {
+            padding: 10px;
+            text-align: left;
+            font-weight: 500;
+        }
+
+        table td {
+            padding: 10px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        table tbody tr:hover {
+            background: #f8f9fa;
+        }
+
+        /* 加载动画 */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(52, 152, 219, 0.3);
+            border-radius: 50%;
+            border-top-color: #3498db;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 小市值策略研究工作台</h1>
+            <p class="subtitle">Small Cap Quantitative Strategy Research Workbench v1.0.0</p>
+        </header>
+
+        <div class="status-banner">
+            <strong>⚠️ 当前状态：数据审计阶段</strong><br>
+            正在进行第一工作包：历史数据契约验证。完整回测需要历史股票池、市值、状态数据通过审计。
+        </div>
+
+        <div class="card">
+            <h2>策略配置</h2>
+            <form id="backtestForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="startDate">开始日期</label>
+                        <input type="date" id="startDate" value="2023-01-01" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="endDate">结束日期</label>
+                        <input type="date" id="endDate" value="2024-12-31" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="initialCash">初始资金（元）</label>
+                        <input type="number" id="initialCash" value="1000000" min="100000" max="10000000" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="targetStocks">目标持股数</label>
+                        <input type="number" id="targetStocks" value="30" min="5" max="100" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="targetBudget">股票预算比例</label>
+                        <input type="number" id="targetBudget" value="0.9" min="0.1" max="1.0" step="0.05" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="minAdv20">最低ADV20（元）</label>
+                        <input type="number" id="minAdv20" value="20000000" min="0" step="1000000" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="slippageBps">滑点（基点）</label>
+                        <input type="number" id="slippageBps" value="5.0" min="0" max="50" step="0.5" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="commissionRate">佣金费率</label>
+                        <input type="number" id="commissionRate" value="0.0003" min="0" max="0.01" step="0.0001" required>
+                    </div>
+                </div>
+
+                <button type="submit" id="runButton">运行回测</button>
+            </form>
+
+            <div class="info-box">
+                <h3>V1基线策略说明</h3>
+                <ul>
+                    <li>选股逻辑：总市值排序，选取1%-20%百分位中最小的30只</li>
+                    <li>调仓频率：月末（最后交易日收盘后生成信号，次日执行）</li>
+                    <li>权重分配：等权，90%股票预算 + 10%现金缓冲</li>
+                    <li>过滤条件：非ST、上市≥250日、ADV20≥2000万、未停牌</li>
+                    <li>执行约束：整手、T+1、涨跌停、开盘滑点</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card" id="result">
+            <h2>回测结果</h2>
+
+            <!-- 汇总指标 -->
+            <div id="summaryMetrics" class="metrics"></div>
+
+            <!-- 权益曲线图 -->
+            <div style="margin-top: 30px;">
+                <h3 style="font-size: 16px; margin-bottom: 15px;">📈 权益曲线</h3>
+                <div id="equityChart" style="width: 100%; height: 400px;"></div>
+            </div>
+
+            <!-- 回撤曲线图 -->
+            <div style="margin-top: 30px;">
+                <h3 style="font-size: 16px; margin-bottom: 15px;">📉 回撤曲线</h3>
+                <div id="drawdownChart" style="width: 100%; height: 300px;"></div>
+            </div>
+
+            <!-- 月度收益 -->
+            <div style="margin-top: 30px;">
+                <h3 style="font-size: 16px; margin-bottom: 15px;">📊 月度收益</h3>
+                <div id="monthlyReturnsChart" style="width: 100%; height: 300px;"></div>
+            </div>
+
+            <!-- 交易记录表格 -->
+            <div style="margin-top: 30px;">
+                <h3 style="font-size: 16px; margin-bottom: 15px;">💱 交易记录</h3>
+                <div id="tradesTable" style="overflow-x: auto;"></div>
+            </div>
+
+            <!-- 原始JSON（折叠） -->
+            <div style="margin-top: 30px;">
+                <details>
+                    <summary style="cursor: pointer; font-weight: 500; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                        查看原始JSON数据
+                    </summary>
+                    <pre id="rawJson" style="background: #f5f5f5; padding: 15px; border-radius: 6px; overflow: auto; font-size: 12px; margin-top: 10px;"></pre>
+                </details>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>开发进度</h2>
+            <div class="metrics">
+                <div class="metric">
+                    <div class="metric-label">阶段一：数据契约</div>
+                    <div class="metric-value">60%</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">阶段二：基线回测</div>
+                    <div class="metric-value">0%</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">阶段三：因子分析</div>
+                    <div class="metric-value">0%</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">阶段四：增强迭代</div>
+                    <div class="metric-value">0%</div>
+                </div>
+            </div>
+
+            <div class="info-box" style="margin-top: 20px; background: #ffebee; border-color: #f44336;">
+                <h3 class="warning">⚠️ 研究模式声明</h3>
+                <ul>
+                    <li>本工具处于研究阶段，不提供实盘交易建议</li>
+                    <li>历史回测存在选择偏差，成本模型为研究假设</li>
+                    <li>小市值策略存在流动性、波动、拥挤风险</li>
+                    <li>样本外被使用后不再是未见数据</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>小市值策略研究工作台 v1.0.0 | 数据审计阶段</p>
+            <p>参考文档：<a href="../../../docs/superpowers/specs/2026-11-04-small-cap-iterative-strategy-design.md">策略设计文档</a></p>
+        </div>
+    </div>
+
+    <!-- 引入ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+
+    <script>
+        const API_BASE = 'http://127.0.0.1:8001';
+
+        // 渲染回测结果
+        function renderBacktestResult(result) {
+            document.getElementById('result').style.display = 'block';
+
+            // 1. 渲染汇总指标
+            renderSummaryMetrics(result.summary);
+
+            // 2. 渲染权益曲线
+            renderEquityChart(result.equity_curve || []);
+
+            // 3. 渲染回撤曲线
+            renderDrawdownChart(result.equity_curve || []);
+
+            // 4. 渲染月度收益
+            renderMonthlyReturns(result.equity_curve || []);
+
+            // 5. 渲染交易记录
+            renderTradesTable(result.trades || []);
+
+            // 6. 显示原始JSON
+            document.getElementById('rawJson').textContent = JSON.stringify(result, null, 2);
+        }
+
+        // 渲染汇总指标
+        function renderSummaryMetrics(summary) {
+            const metrics = [
+                { label: '总收益率', value: `${(summary.total_return * 100).toFixed(2)}%`, color: summary.total_return >= 0 ? '#27ae60' : '#e74c3c' },
+                { label: '年化收益', value: `${(summary.annual_return * 100).toFixed(2)}%`, color: summary.annual_return >= 0 ? '#27ae60' : '#e74c3c' },
+                { label: '最大回撤', value: `${(summary.max_drawdown * 100).toFixed(2)}%`, color: '#e74c3c' },
+                { label: '夏普比率', value: summary.sharpe?.toFixed(2) || 'N/A', color: '#3498db' },
+                { label: '年化波动', value: `${(summary.annual_volatility * 100).toFixed(2)}%`, color: '#95a5a6' },
+                { label: '总交易笔数', value: summary.total_trades, color: '#9b59b6' },
+                { label: '总费用', value: `${summary.total_fees.toFixed(2)}元`, color: '#e67e22' },
+                { label: '评估天数', value: `${summary.evaluation_days}天`, color: '#34495e' }
+            ];
+
+            const html = metrics.map(m => `
+                <div class="metric" style="border-left-color: ${m.color}">
+                    <div class="metric-label">${m.label}</div>
+                    <div class="metric-value" style="color: ${m.color}">${m.value}</div>
+                </div>
+            `).join('');
+
+            document.getElementById('summaryMetrics').innerHTML = html;
+        }
+
+        // 渲染权益曲线
+        function renderEquityChart(equityCurve) {
+            const chart = echarts.init(document.getElementById('equityChart'));
+
+            const dates = equityCurve.map(d => d.date);
+            const equity = equityCurve.map(d => d.equity);
+            const cash = equityCurve.map(d => d.cash);
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'cross' },
+                    formatter: function(params) {
+                        const date = params[0].axisValue;
+                        let html = `<strong>${date}</strong><br/>`;
+                        params.forEach(p => {
+                            html += `${p.marker} ${p.seriesName}: ${p.value.toLocaleString()}元<br/>`;
+                        });
+                        return html;
+                    }
+                },
+                legend: {
+                    data: ['总权益', '现金']
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: dates
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: {
+                        formatter: '{value}'
+                    }
+                },
+                series: [
+                    {
+                        name: '总权益',
+                        type: 'line',
+                        smooth: true,
+                        data: equity,
+                        itemStyle: { color: '#3498db' },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(52, 152, 219, 0.3)' },
+                                { offset: 1, color: 'rgba(52, 152, 219, 0.05)' }
+                            ])
+                        }
+                    },
+                    {
+                        name: '现金',
+                        type: 'line',
+                        smooth: true,
+                        data: cash,
+                        itemStyle: { color: '#95a5a6' }
+                    }
+                ]
+            };
+
+            chart.setOption(option);
+        }
+
+        // 渲染回撤曲线
+        function renderDrawdownChart(equityCurve) {
+            const chart = echarts.init(document.getElementById('drawdownChart'));
+
+            const dates = equityCurve.map(d => d.date);
+            const drawdown = equityCurve.map(d => -(d.drawdown * 100));
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'cross' },
+                    formatter: function(params) {
+                        return `<strong>${params[0].axisValue}</strong><br/>回撤: ${Math.abs(params[0].value).toFixed(2)}%`;
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    boundaryGap: false,
+                    data: dates
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: {
+                        formatter: '{value}%'
+                    }
+                },
+                series: [
+                    {
+                        name: '回撤',
+                        type: 'line',
+                        smooth: true,
+                        data: drawdown,
+                        itemStyle: { color: '#e74c3c' },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(231, 76, 60, 0.3)' },
+                                { offset: 1, color: 'rgba(231, 76, 60, 0.05)' }
+                            ])
+                        }
+                    }
+                ]
+            };
+
+            chart.setOption(option);
+        }
+
+        // 渲染月度收益
+        function renderMonthlyReturns(equityCurve) {
+            if (equityCurve.length === 0) return;
+
+            const chart = echarts.init(document.getElementById('monthlyReturnsChart'));
+
+            // 按月分组计算收益
+            const monthlyData = {};
+            let lastMonthEquity = {};
+
+            equityCurve.forEach((d, idx) => {
+                const month = d.date.substring(0, 7); // YYYY-MM
+
+                if (!monthlyData[month]) {
+                    monthlyData[month] = { start: d.equity, end: d.equity };
+                } else {
+                    monthlyData[month].end = d.equity;
+                }
+            });
+
+            const months = Object.keys(monthlyData).sort();
+            const returns = [];
+
+            let prevEquity = equityCurve[0]?.equity || 1000000;
+            months.forEach(month => {
+                const data = monthlyData[month];
+                const ret = ((data.end - prevEquity) / prevEquity) * 100;
+                returns.push(ret);
+                prevEquity = data.end;
+            });
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: function(params) {
+                        const value = params[0].value;
+                        return `<strong>${params[0].axisValue}</strong><br/>收益: ${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+                    }
+                },
+                grid: {
+                    left: '3%',
+                    right: '4%',
+                    bottom: '3%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: months
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: {
+                        formatter: '{value}%'
+                    }
+                },
+                series: [
+                    {
+                        name: '月度收益',
+                        type: 'bar',
+                        data: returns,
+                        itemStyle: {
+                            color: function(params) {
+                                return params.value >= 0 ? '#27ae60' : '#e74c3c';
+                            }
+                        }
+                    }
+                ]
+            };
+
+            chart.setOption(option);
+        }
+
+        // 渲染交易记录表格
+        function renderTradesTable(trades) {
+            if (trades.length === 0) {
+                document.getElementById('tradesTable').innerHTML = '<p style="color: #999;">暂无交易记录</p>';
+                return;
+            }
+
+            const rows = trades.slice(0, 20).map(t => `
+                <tr>
+                    <td>${t.date}</td>
+                    <td><span style="color: ${t.side === 'buy' ? '#27ae60' : '#e74c3c'}; font-weight: bold;">${t.side === 'buy' ? '买入' : '卖出'}</span></td>
+                    <td>${t.symbol}</td>
+                    <td>${t.shares}</td>
+                    <td>${t.price.toFixed(2)}</td>
+                    <td>${t.amount.toFixed(2)}</td>
+                    <td>${t.fees.toFixed(2)}</td>
+                    <td style="color: ${(t.realized_pnl || 0) >= 0 ? '#27ae60' : '#e74c3c'}">
+                        ${t.realized_pnl ? ((t.realized_pnl >= 0 ? '+' : '') + t.realized_pnl.toFixed(2)) : '-'}
+                    </td>
+                </tr>
+            `).join('');
+
+            const html = `
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                    <thead>
+                        <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                            <th style="padding: 10px; text-align: left;">日期</th>
+                            <th style="padding: 10px; text-align: left;">方向</th>
+                            <th style="padding: 10px; text-align: left;">代码</th>
+                            <th style="padding: 10px; text-align: right;">股数</th>
+                            <th style="padding: 10px; text-align: right;">价格</th>
+                            <th style="padding: 10px; text-align: right;">金额</th>
+                            <th style="padding: 10px; text-align: right;">费用</th>
+                            <th style="padding: 10px; text-align: right;">盈亏</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+                ${trades.length > 20 ? `<p style="margin-top: 10px; color: #666; font-size: 12px;">仅显示前20笔交易，共${trades.length}笔</p>` : ''}
+            `;
+
+            document.getElementById('tradesTable').innerHTML = html;
+        }
+
+        // 表单提交
+        document.getElementById('backtestForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const button = document.getElementById('runButton');
+            button.disabled = true;
+            button.textContent = '运行中...';
+
+            const data = {
+                start_date: document.getElementById('startDate').value,
+                end_date: document.getElementById('endDate').value,
+                initial_cash: parseFloat(document.getElementById('initialCash').value),
+                target_stocks: parseInt(document.getElementById('targetStocks').value),
+                target_budget: parseFloat(document.getElementById('targetBudget').value),
+                min_adv20: parseFloat(document.getElementById('minAdv20').value),
+                slippage_bps: parseFloat(document.getElementById('slippageBps').value),
+                commission_rate: parseFloat(document.getElementById('commissionRate').value)
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/api/backtest`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (result.status === 'completed') {
+                    renderBacktestResult(result);
+
+                    // 滚动到结果
+                    document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    // 显示错误或未完成状态
+                    document.getElementById('result').style.display = 'block';
+                    document.getElementById('summaryMetrics').innerHTML = `
+                        <div style="background: #fff3cd; padding: 15px; border-radius: 6px;">
+                            <strong>状态：</strong>${result.status}<br>
+                            <strong>消息：</strong>${result.message}
+                        </div>
+                    `;
+                    document.getElementById('rawJson').textContent = JSON.stringify(result, null, 2);
+                }
+
+            } catch (error) {
+                alert('请求失败：' + error.message + '\n\n请确保后端服务已启动（python start.py）');
+            } finally {
+                button.disabled = false;
+                button.textContent = '运行回测';
+            }
+        });
+
+        // 检查后端健康状态
+        async function checkHealth() {
+            try {
+                const response = await fetch(`${API_BASE}/api/health`);
+                const data = await response.json();
+                console.log('后端服务正常:', data);
+            } catch (error) {
+                console.warn('后端服务未启动，请运行: python start.py');
+            }
+        }
+
+        checkHealth();
+    </script>
+</body>
+</html>
