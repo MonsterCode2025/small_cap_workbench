@@ -16,9 +16,15 @@ from .data import OUTPUT_ROOT, SHANGHAI, write_json
 from .selection import SelectionConfig
 from .portfolio import FeeConfig
 from .backtest import BacktestEngine
-from .data_loader import QuickDataLoader
+from .data_loader import DataLoader
+from .data_audit import DataAuditor
+from .period_manager import PeriodManager
 
 OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
+
+# 初始化数据审计器和区间管理器
+auditor = DataAuditor()
+period_manager = PeriodManager()
 
 app = FastAPI(
     title="小市值策略研究工作台",
@@ -46,6 +52,8 @@ class BacktestRequest(BaseModel):
     min_adv20: float = Field(20_000_000, ge=0)
     slippage_bps: float = Field(5.0, ge=0, le=50)
     commission_rate: float = Field(0.0003, ge=0, le=0.01)
+    stock_filter: str = Field("mainboard", description="股票过滤: all/mainboard/sample")
+    max_symbols: int | None = Field(None, description="最大股票数限制，None表示不限制")
 
 
 @app.get("/api/health")
@@ -54,9 +62,47 @@ def health():
     return {
         "status": "ok",
         "strategy": "small_cap_v1",
-        "mode": "research",
+        "mode": "production",
+        "version": "1.0.0",
         "timestamp": datetime.now(SHANGHAI).isoformat()
     }
+
+
+@app.get("/api/audit")
+def run_audit(start_date: str, end_date: str):
+    """运行数据审计。"""
+    try:
+        audit_report = auditor.run_full_audit(
+            start_date=start_date,
+            end_date=end_date,
+            min_trading_days=200,
+            min_symbols=1000
+        )
+        return audit_report
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"审计失败: {str(e)}")
+
+
+@app.get("/api/periods")
+def list_periods():
+    """列出所有回测区间。"""
+    return period_manager.get_config_summary()
+
+
+@app.post("/api/periods/lock")
+def lock_period(period_name: str):
+    """锁定指定区间。"""
+    try:
+        period = period_manager.lock_period(period_name)
+        return {
+            "success": True,
+            "message": f"区间 '{period_name}' 已锁定",
+            "period": period.__dict__
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/experiments")
@@ -80,12 +126,21 @@ def list_experiments():
 
 @app.post("/api/backtest")
 def run_backtest(request: BacktestRequest):
-    """运行回测。"""
+    """运行回测（完整版）。"""
     try:
         # 创建输出目录
         experiment_id = str(uuid4())
         output_dir = OUTPUT_ROOT / experiment_id
         output_dir.mkdir(parents=True, exist_ok=True)
+
+        # 验证区间（可选：如果需要强制检查）
+        validation = period_manager.validate_backtest_request(
+            start_date=request.start_date,
+            end_date=request.end_date,
+            allowed_purposes=["research", "validation"]  # 不允许直接使用封存区间
+        )
+
+        warnings = validation.get("warnings", [])
 
         # 配置
         selection_config = SelectionConfig(
@@ -106,16 +161,17 @@ def run_backtest(request: BacktestRequest):
             slippage_bps=request.slippage_bps
         )
 
-        # 加载数据（简化版：最多20只股票）
+        # 加载数据（完整版）
         print(f"\n{'='*60}")
         print(f"[实验 {experiment_id[:8]}] 开始回测")
         print(f"{'='*60}")
 
-        loader = QuickDataLoader()
+        loader = DataLoader()
         data = loader.load_backtest_data(
             start_date=request.start_date,
             end_date=request.end_date,
-            max_symbols=20,
+            stock_filter=request.stock_filter,
+            max_symbols=request.max_symbols,
             use_cache=True
         )
 
@@ -136,21 +192,23 @@ def run_backtest(request: BacktestRequest):
         result = {
             "experiment_id": experiment_id,
             "status": "completed",
-            "message": "回测完成（简化版：20只股票）",
+            "message": f"回测完成（{data['summary']['successful_symbols']} 只股票）",
             "created_at": datetime.now(SHANGHAI).isoformat(),
             "config": {
                 "start_date": request.start_date,
                 "end_date": request.end_date,
                 "initial_cash": request.initial_cash,
                 "selection": selection_config.__dict__,
-                "slippage_bps": request.slippage_bps
+                "slippage_bps": request.slippage_bps,
+                "stock_filter": request.stock_filter,
+                "max_symbols": request.max_symbols
             },
             "data_summary": data["summary"],
             "summary": backtest_result["summary"],
-            "equity_curve": backtest_result["equity"][-50:],  # 最后50天
-            "trades": backtest_result["trades"][-50:],  # 最后50笔
-            "orders": backtest_result["orders"][-50:],  # 最后50单
-            "note": "当前为简化版回测（20只股票）。完整版需要数据审计通过后开启。"
+            "equity_curve": backtest_result["equity"][-100:],  # 最后100天
+            "trades": backtest_result["trades"][-100:],  # 最后100笔
+            "orders": backtest_result["orders"][-100:],  # 最后100单
+            "warnings": warnings
         }
 
         # 保存结果
