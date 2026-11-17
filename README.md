@@ -45,23 +45,30 @@
 small_cap_workbench/
 ├── backend/
 │   ├── __init__.py
-│   ├── data.py           # 数据获取、交易日历、股票池
-│   ├── selection.py      # 选股逻辑、排序、过滤
-│   ├── portfolio.py      # 多股票账户、调仓执行、费用
-│   ├── backtest.py       # 回测引擎、历史模拟
-│   └── app.py            # FastAPI服务
+│   ├── data.py              # 数据获取、交易日历、股票池
+│   ├── data_loader.py       # 完整版数据加载器
+│   ├── data_audit.py        # 数据审计模块
+│   ├── period_manager.py    # 区间管理模块
+│   ├── selection.py         # 选股逻辑、排序、过滤
+│   ├── portfolio.py         # 多股票账户、调仓执行、费用
+│   ├── backtest.py          # 回测引擎、历史模拟
+│   └── app.py               # FastAPI服务
+├── frontend/
+│   └── index.html           # Web界面
 ├── tests/
-│   └── test_core.py      # 核心逻辑测试
-├── data/                 # 数据快照（gitignore）
-├── outputs/              # 实验结果（gitignore）
-├── pyproject.toml        # 依赖配置
-├── start.py              # 启动脚本
+│   └── test_core.py         # 核心逻辑测试
+├── docs/
+│   ├── 模块详解.md           # 详细模块文档
+│   ├── 新增功能使用说明.md   # 功能使用指南
+│   └── 更新总结.md           # 更新记录
+├── data/                    # 数据快照（gitignore）
+├── outputs/                 # 实验结果（gitignore）
+├── pyproject.toml           # 依赖配置
+├── start.py                 # 启动脚本
 └── README.md
 ```
 
-## 已开发模块详解
-
-### 模块总览
+## 模块概览
 
 | 模块 | 文件 | 状态 | 功能 |
 |------|------|------|------|
@@ -75,652 +82,7 @@ small_cap_workbench/
 | **API模块** | `backend/app.py` | ✅ 完成 | FastAPI服务、实验管理 |
 | **测试模块** | `tests/test_core.py` | ✅ 完成 | 单元测试覆盖 |
 
----
-
-### 1️⃣ 数据模块 (`backend/data.py`)
-
-**功能**：提供历史数据获取、交易日历、股票池构建等基础数据服务
-
-#### 核心函数
-
-##### `fetch_trading_calendar(start, end)`
-**功能**：获取交易日历
-
-**输入**：
-- `start`: str - 起始日期 "YYYY-MM-DD"
-- `end`: str - 结束日期 "YYYY-MM-DD"
-
-**输出**：
-- DataFrame，列：`trade_date`
-
-**用途**：识别月末交易日、确定调仓日
-
----
-
-##### `fetch_stock_list(date=None)`
-**功能**：获取沪深A股列表
-
-**输入**：
-- `date`: str | None - 指定日期（None表示当前）
-
-**输出**：
-- DataFrame，列：`symbol`, `name`, `exchange`, `list_date`
-
-**用途**：构建历史股票池
-
----
-
-##### `fetch_daily_quotes(symbol, start, end)`
-**功能**：获取日线行情（未复权）
-
-**输入**：
-- `symbol`: str - 标准格式股票代码（如"SZ.000001"）
-- `start`: str - 起始日期
-- `end`: str - 结束日期
-
-**输出**：
-- DataFrame，列：`date`, `open`, `high`, `low`, `close`, `volume`, `amount`
-
-**用途**：获取收盘价、开盘价、成交额
-
----
-
-##### `calculate_adv20(quotes, target_date)`
-**功能**：计算20日平均成交额（ADV20）
-
-**输入**：
-- `quotes`: DataFrame - 日线行情数据
-- `target_date`: str - 目标日期
-
-**输出**：
-- float - ADV20值（元），数据不足返回0
-
-**用途**：流动性过滤
-
-**算法**：
-```python
-# 获取目标日期之前的20个交易日
-before = quotes[quotes["date"] <= target_date].tail(20)
-# 停牌日成交额视为0
-adv20 = before["amount"].fillna(0).mean()
-```
-
----
-
-##### `fetch_market_cap(symbol, date)`
-**功能**：获取指定日期的总市值
-
-**输入**：
-- `symbol`: str - 股票代码
-- `date`: str - 日期
-
-**输出**：
-- float | None - 总市值（元），失败返回None
-
-**用途**：市值排序
-
----
-
-##### `UniverseBuilder` 类
-**功能**：历史股票池构建器
-
-**方法**：
-
-- `get_month_ends(start, end)` → list[str]
-  - 获取区间内的月末交易日列表
-
-- `filter_basic_eligibility(stock_info, date)` → DataFrame
-  - 基础资格过滤（当前为框架，待实现ST/退市过滤）
-
----
-
-### 2️⃣ 选股模块 (`backend/selection.py`)
-
-**功能**：实现小市值选股逻辑，包括过滤、排序、权重分配
-
-#### 核心类
-
-##### `SelectionConfig` (配置类)
-**功能**：选股参数配置
-
-**参数**：
-
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `target_stocks` | int | 30 | 目标持股数量 |
-| `target_budget` | float | 0.9 | 目标股票预算比例（90%） |
-| `min_adv20` | float | 20,000,000 | 最低20日平均成交额（元） |
-| `min_percentile` | float | 0.01 | 市值百分位下限（排除最小1%） |
-| `max_percentile` | float | 0.20 | 市值百分位上限（前20%） |
-| `min_listed_days` | int | 250 | 最低上市交易日数 |
-
-**验证**：
-- `target_stocks`: 1-100
-- `target_budget`: 0.01-1.0
-- `min_percentile < max_percentile`
-
----
-
-##### `StockCandidate` (数据类)
-**功能**：候选股票信息
-
-**字段**：
-- `symbol`: str - 股票代码
-- `market_cap`: float - 总市值
-- `adv20`: float - 20日平均成交额
-- `rank`: int - 市值排名（1=最小）
-- `percentile`: float - 百分位（0-1）
-- `close`: float - 收盘价
-- `trading_status`: str - 交易状态（"trading"/"suspended"）
-- `risk_status`: str - 风险状态（"normal"/"st"/"delisted"）
-- `listed_days`: int - 上市交易日数
-
----
-
-##### `SmallCapSelector` 类
-**功能**：小市值选股器
-
-**方法 1**: `select()`
-
-**功能**：执行完整选股流程
-
-**输入**：
-- `universe`: DataFrame - 历史股票池，必须包含`symbol`列
-- `market_caps`: dict[str, float] - 总市值字典
-- `adv20_values`: dict[str, float] - ADV20字典
-- `prices`: dict[str, float] - 收盘价字典
-- `trading_status`: dict[str, str] | None - 交易状态（默认全部"trading"）
-- `risk_status`: dict[str, str] | None - 风险状态（默认全部"normal"）
-- `listed_days`: dict[str, int] | None - 上市交易日数（默认全部满足）
-
-**输出**：
-- `candidates`: list[StockCandidate] - 候选股票列表
-- `stats`: dict - 统计信息
-
-**统计信息字段**：
-```python
-{
-    "total_universe": 5000,           # 股票池总数
-    "filtered_basic": 4500,           # 基础过滤后
-    "filtered_liquidity": 3000,       # 流动性过滤后
-    "filtered_trading": 3000,         # 交易状态过滤后
-    "eligible_for_ranking": 3000,     # 可排序数量
-    "in_target_percentile": 600,      # 目标百分位内
-    "final_selected": 30,             # 最终选中
-    "insufficient_candidates": False  # 候选不足标记
-}
-```
-
-**执行流程**：
-1. 基础资格过滤（ST、上市时长）
-2. 流动性过滤（ADV20、停牌）
-3. 市值排序（升序）
-4. 计算百分位
-5. 筛选1%-20%范围
-6. 选择前30只
-
----
-
-**方法 2**: `compute_target_weights(candidates)`
-
-**功能**：计算目标权重（等权）
-
-**输入**：
-- `candidates`: list[StockCandidate]
-
-**输出**：
-- dict[str, float] - {symbol: weight}
-
-**算法**：
-```python
-weight_per_stock = target_budget / len(candidates)  # 0.9 / 30 = 0.03
-```
-
----
-
-**方法 3**: `compute_target_shares(candidates, weights, total_equity)`
-
-**功能**：计算目标股数（整手约束）
-
-**输入**：
-- `candidates`: list[StockCandidate]
-- `weights`: dict[str, float] - 权重字典
-- `total_equity`: float - 总资产
-
-**输出**：
-- dict[str, int] - {symbol: shares}，100的整数倍
-
-**算法**：
-```python
-target_value = total_equity * weight  # 1,000,000 * 0.03 = 30,000
-raw_shares = target_value / close     # 30,000 / 10 = 3,000
-shares = int(raw_shares // 100) * 100 # 2,900（整手）
-```
-
----
-
-### 3️⃣ 账户模块 (`backend/portfolio.py`)
-
-**功能**：多股票持仓管理、调仓执行、费用计算、T+1限制
-
-#### 核心类
-
-##### `FeeConfig` (配置类)
-**功能**：费用配置
-
-**参数**：
-
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `commission_rate` | float | 0.0003 | 佣金费率（万三） |
-| `min_commission` | float | 5.0 | 最低佣金（元） |
-| `stamp_tax_rate` | float | 0.0005 | 印花税率（2023-08-28起） |
-| `transfer_fee_rate` | float | 0.00001 | 过户费率 |
-
-**方法**: `calculate(amount, side, date)`
-
-**输入**：
-- `amount`: float - 成交金额
-- `side`: Literal["buy", "sell"] - 买卖方向
-- `date`: str - 交易日期
-
-**输出**：
-```python
-{
-    "commission": 15.0,    # 佣金
-    "stamp": 50.0,         # 印花税（仅卖出）
-    "transfer": 1.0,       # 过户费
-    "total": 66.0          # 总费用
-}
-```
-
-**算法**：
-```python
-# 佣金：买卖双向
-commission = max(5.0, amount * 0.0003)
-
-# 印花税：仅卖出，税率按日期
-if side == "sell":
-    stamp = amount * (0.0005 if date >= "2023-08-28" else 0.001)
-
-# 过户费：买卖双向
-transfer = amount * 0.00001
-```
-
----
-
-##### `Position` (数据类)
-**功能**：持仓信息
-
-**字段**：
-- `symbol`: str - 股票代码
-- `shares`: int - 持仓股数
-- `cost_basis`: float - 成本基础（含买入费用）
-- `last_buy_date`: str - 最后买入日期（T+1检查）
-
----
-
-##### `Order` (数据类)
-**功能**：订单记录
-
-**字段**：
-- `date`: str - 执行日期
-- `signal_date`: str - 信号日期
-- `symbol`: str
-- `side`: Literal["buy", "sell"]
-- `target_shares`: int - 目标股数
-- `filled_shares`: int - 实际成交股数
-- `price`: float - 成交价格
-- `amount`: float - 成交金额
-- `fees`: float - 费用
-- `status`: Literal["filled", "rejected", "partial"]
-- `reason`: str - 说明
-
----
-
-##### `Trade` (数据类)
-**功能**：成交记录
-
-**字段**：
-- `date`: str
-- `symbol`: str
-- `side`: Literal["buy", "sell"]
-- `shares`: int
-- `price`: float
-- `amount`: float
-- `fees`: float
-- `realized_pnl`: float | None - 实现盈亏（仅卖出）
-
----
-
-##### `PortfolioState` (数据类)
-**功能**：组合状态快照
-
-**字段**：
-- `date`: str
-- `equity`: float - 总资产
-- `cash`: float - 现金
-- `positions`: list[Position] - 持仓列表
-- `market_values`: dict[str, float] - 各股票市值
-- `drawdown`: float - 回撤
-- `peak_equity`: float - 峰值权益
-
----
-
-##### `Portfolio` 类
-**功能**：多股票组合账户
-
-**初始化参数**：
-- `initial_cash`: float - 初始资金
-- `fee_config`: FeeConfig | None - 费用配置
-- `slippage_bps`: float - 滑点（基点，默认5.0）
-
-**属性**：
-- `cash`: float - 当前现金
-- `positions`: dict[str, Position] - 持仓字典
-- `equity_history`: list[PortfolioState] - 权益历史
-- `trade_history`: list[Trade] - 成交历史
-- `order_history`: list[Order] - 订单历史
-
----
-
-**方法 1**: `execute_rebalance()`
-
-**功能**：执行调仓（先卖后买）
-
-**输入**：
-- `signal_date`: str - 信号生成日期
-- `execution_date`: str - 执行日期
-- `target_shares`: dict[str, int] - 目标持仓
-- `prices`: dict[str, float] - 开盘价
-- `limits`: dict[str, tuple[float, float]] | None - 涨跌停价
-- `trading_status`: dict[str, str] | None - 交易状态
-
-**输出**：
-```python
-{
-    "orders": 15,         # 订单总数
-    "filled": 12,         # 成交数量
-    "rejected": 3,        # 拒绝数量
-    "buy_amount": 900000, # 买入金额
-    "sell_amount": 50000  # 卖出金额
-}
-```
-
-**执行逻辑**：
-1. **卖出阶段**：清理不在目标中的持仓
-2. **买入阶段**：建立新持仓
-
-**检查项**（卖出）：
-- 开盘价是否存在
-- 是否跌停
-- 是否停牌
-- T+1限制（当日买入不能卖出）
-
-**检查项**（买入）：
-- 开盘价是否存在
-- 是否涨停
-- 是否停牌
-- 资金是否充足
-- 整手约束（100的倍数）
-
----
-
-**方法 2**: `compute_equity(prices)`
-
-**功能**：计算当前总资产
-
-**输入**：
-- `prices`: dict[str, float] - 当前价格
-
-**输出**：
-- float - 总资产（现金+持仓市值）
-
----
-
-**方法 3**: `record_state(date, prices)`
-
-**功能**：记录每日状态快照
-
-**输入**：
-- `date`: str - 日期
-- `prices`: dict[str, float] - 收盘价
-
-**输出**：无（追加到`equity_history`）
-
----
-
-**方法 4**: `get_summary()`
-
-**功能**：生成汇总统计
-
-**输出**：
-```python
-{
-    "initial_cash": 1000000,
-    "final_equity": 1150000,
-    "total_return": 0.15,           # 15%
-    "annual_return": 0.12,          # 年化收益
-    "annual_volatility": 0.18,      # 年化波动率
-    "sharpe": 0.67,                 # 夏普比率
-    "max_drawdown": 0.08,           # 最大回撤
-    "total_trades": 360,            # 成交笔数
-    "total_orders": 400,            # 订单总数
-    "rejected_orders": 40,          # 拒绝订单
-    "total_fees": 5000,             # 总费用
-    "realized_pnl": 120000,         # 已实现盈亏
-    "evaluation_days": 250          # 评估天数
-}
-```
-
----
-
-### 4️⃣ 回测模块 (`backend/backtest.py`)
-
-**功能**：集成选股、账户管理和历史模拟
-
-#### 核心类
-
-##### `BacktestEngine` 类
-
-**初始化参数**：
-- `selection_config`: SelectionConfig | None
-- `fee_config`: FeeConfig | None
-- `initial_cash`: float - 默认1,000,000
-- `slippage_bps`: float - 默认5.0
-
-**属性**：
-- `selector`: SmallCapSelector - 选股器
-- `portfolio`: Portfolio - 账户
-- `selection_config`: SelectionConfig - 选股配置
-
----
-
-**方法**: `run()`
-
-**功能**：执行完整回测
-
-**输入**：
-- `trading_dates`: list[str] - 交易日列表
-- `universe_data`: dict[str, pd.DataFrame] - 每日股票池 {date: universe_df}
-- `market_data`: dict[str, dict[str, pd.DataFrame]] - 市场行情 {symbol: quotes_df}
-- `start_date`: str - 开始日期
-- `end_date`: str - 结束日期
-
-**输出**：
-```python
-{
-    "summary": {...},          # 汇总统计（见Portfolio.get_summary）
-    "equity": [...],           # 权益曲线记录
-    "trades": [...],           # 成交记录
-    "orders": [...],           # 订单记录
-    "config": {...}            # 配置信息
-}
-```
-
-**权益记录格式**：
-```python
-{
-    "date": "2024-01-05",
-    "equity": 1050000,
-    "cash": 100000,
-    "drawdown": 0.02,
-    "positions": 30
-}
-```
-
-**成交记录格式**：
-```python
-{
-    "date": "2024-01-05",
-    "symbol": "SZ.000001",
-    "side": "buy",
-    "shares": 900,
-    "price": 10.05,
-    "amount": 9045.0,
-    "fees": 5.0,
-    "realized_pnl": None
-}
-```
-
-**订单记录格式**：
-```python
-{
-    "date": "2024-01-05",
-    "signal_date": "2024-01-04",
-    "symbol": "SZ.000001",
-    "side": "buy",
-    "target_shares": 1000,
-    "filled_shares": 900,
-    "status": "partial",
-    "reason": "预算限制，仅买入900/1000股"
-}
-```
-
-**执行流程**：
-1. 获取月末日期列表
-2. 按交易日循环
-3. 月末：生成选股信号、计算目标持仓
-4. 次日：执行调仓
-5. 每日：记录状态快照
-6. 汇总统计
-
----
-
-### 5️⃣ API模块 (`backend/app.py`)
-
-**功能**：FastAPI服务，提供HTTP接口
-
-#### API端点
-
-##### `GET /api/health`
-**功能**：健康检查
-
-**输出**：
-```json
-{
-    "status": "ok",
-    "strategy": "small_cap_v1",
-    "mode": "research",
-    "timestamp": "2024-11-20T10:30:00+08:00"
-}
-```
-
----
-
-##### `POST /api/backtest`
-**功能**：运行回测
-
-**请求体**：
-```json
-{
-    "start_date": "2023-01-01",
-    "end_date": "2024-12-31",
-    "initial_cash": 1000000,
-    "target_stocks": 30,
-    "target_budget": 0.9,
-    "min_adv20": 20000000,
-    "slippage_bps": 5.0,
-    "commission_rate": 0.0003
-}
-```
-
-**参数验证**：
-- `initial_cash`: 100,000 - 10,000,000
-- `target_stocks`: 5 - 100
-- `target_budget`: 0.1 - 1.0
-- `slippage_bps`: 0 - 50
-
-**响应**：
-```json
-{
-    "experiment_id": "uuid",
-    "status": "data_not_ready",
-    "message": "第一工作包：数据审计阶段...",
-    "created_at": "2024-11-20T10:30:00+08:00",
-    "config": {...},
-    "summary": {...}
-}
-```
-
-**当前状态**：返回模拟结果结构，等待数据审计通过
-
----
-
-##### `GET /api/experiments`
-**功能**：列出历史实验（最近50个）
-
-**输出**：
-```json
-{
-    "experiments": [
-        {
-            "experiment_id": "uuid",
-            "created_at": "2024-11-20T10:30:00+08:00",
-            "summary": {...},
-            "config": {...}
-        }
-    ]
-}
-```
-
----
-
-##### `GET /api/experiments/{experiment_id}`
-**功能**：获取实验详情
-
-**输出**：完整的实验结果JSON
-
----
-
-### 6️⃣ 测试模块 (`tests/test_core.py`)
-
-**功能**：核心逻辑单元测试
-
-#### 测试类
-
-##### `TestSelection` - 选股模块测试
-- `test_selection_config_validation()` - 配置验证
-- `test_small_cap_selector_basic()` - 基本选股逻辑
-- `test_liquidity_filter()` - 流动性过滤
-- `test_percentile_ranking()` - 百分位筛选
-
-##### `TestPortfolio` - 账户模块测试
-- `test_buy_order_execution()` - 买入订单执行
-- `test_sell_order_execution()` - 卖出订单执行
-- `test_t_plus_1_restriction()` - T+1限制
-- `test_insufficient_cash()` - 资金不足处理
-
-##### `TestFees` - 费用模块测试
-- `test_buy_fees()` - 买入费用计算
-- `test_sell_fees_after_stamp_tax_cut()` - 卖出费用（印花税减半后）
-
-**运行测试**：
-```bash
-uv run pytest tests/test_core.py -v
-```
-
----
+**详细文档**：参见 [模块详解.md](docs/模块详解.md)
 
 ## 模块间数据流
 
@@ -732,6 +94,21 @@ uv run pytest tests/test_core.py -v
 │  - 日线行情      │
 │  - ADV20        │
 └────────┬────────┘
+         │
+         ↓
+┌─────────────────┐
+│  data_loader.py │  数据加载
+│  - 批量获取      │  输入: start_date, end_date, stock_filter
+│  - 缓存管理      │  输出: trading_dates, universe_data, market_data
+│  - 进度显示      │  模式: all/mainboard/sample
+└────────┬────────┘
+         │
+         ├──→ ┌─────────────────┐
+         │    │  data_audit.py  │  数据审计
+         │    │  - 交易日历审计  │  验证数据完整性
+         │    │  - 股票池审计    │  检查覆盖度
+         │    │  - 数据可用性    │  抽样检查
+         │    └─────────────────┘
          │
          ↓
 ┌─────────────────┐
@@ -761,6 +138,14 @@ uv run pytest tests/test_core.py -v
 │  app.py         │  API服务
 │  - HTTP接口     │  输入: BacktestRequest
 │  - 实验管理     │  输出: JSON结果, 保存到outputs/
+│  - 审计接口     │  集成审计和区间管理
+└─────────────────┘
+
+┌─────────────────┐
+│period_manager.py│  区间管理（独立模块）
+│  - 定义区间     │  管理研究/验证/封存区间
+│  - 锁定机制     │  防止误用封存数据
+│  - 配置持久化   │  保存到 data/periods.json
 └─────────────────┘
 ```
 
@@ -1036,6 +421,51 @@ assert filled_shares % 100 == 0
 - 策略增强迭代（V1.1, V1.2, V2等）
 - 前向模拟测试
 
+---
+
+## 新增功能（v1.0.0）
+
+### 1. 完整版回测系统
+
+去掉简化版限制，支持：
+- **全市场模式** (`stock_filter="all"`)：加载所有沪深A股
+- **主板模式** (`stock_filter="mainboard"`)：仅主板股票（推荐）
+- **样本模式** (`stock_filter="sample"`)：20只股票快速测试
+- **灵活限制** (`max_symbols`)：可选的股票数量上限
+
+### 2. 数据审计功能
+
+验证数据质量，包括：
+- 交易日历完整性（≥200天）
+- 股票池覆盖度（≥1000只）
+- 市场数据可用性（≥70%成功率）
+
+**使用**：`GET /api/audit?start_date=xxx&end_date=xxx`
+
+### 3. 区间管理功能
+
+管理历史回测区间，避免过拟合：
+- **研究区间** (research)：用于策略开发和调参
+- **验证区间** (validation)：独立验证策略效果
+- **封存区间** (reserved)：样本外测试（慎用）
+
+**功能**：
+- 定义和锁定区间
+- 验证回测请求是否在允许的区间内
+- 配置持久化到 `data/periods.json`
+
+**使用**：
+- `GET /api/periods`：查看所有区间
+- `POST /api/periods/lock?period_name=xxx`：锁定区间
+
+### 相关文档
+
+- [新增功能使用说明](docs/新增功能使用说明.md) - API示例、工作流程、常见问题
+- [模块详解](docs/模块详解.md) - 详细的模块接口和实现说明
+- [更新总结](docs/更新总结.md) - 本次更新的完整记录
+
+---
+
 ## 注意事项
 
 ### 研究模式声明
@@ -1071,6 +501,9 @@ assert filled_shares % 100 == 0
 - [小市值策略设计文档](../../../docs/superpowers/specs/2026-11-04-small-cap-iterative-strategy-design.md)
 - [量化策略研发步骤2-6](../../../docs/量化策略研发_步骤2至6方法与模型.md)
 - [小市值工作台用户说明](../../../docs/小市值工作台用户说明.md)
+- [新增功能使用说明](docs/新增功能使用说明.md) - API示例和工作流程
+- [模块详解](docs/模块详解.md) - 详细的模块接口文档
+- [更新总结](docs/更新总结.md) - v1.0.0 更新记录
 
 ## 许可
 
@@ -1078,6 +511,6 @@ assert filled_shares % 100 == 0
 
 ---
 
-**当前版本**: 1.0.0 - 第一工作包：数据审计与核心逻辑  
+**当前版本**: 1.0.0 - 完整版  
 **更新日期**: 2024-11-20  
-**状态**: 数据契约阶段，等待历史数据审计通过
+**状态**: 完整版回测系统，支持数据审计和区间管理
