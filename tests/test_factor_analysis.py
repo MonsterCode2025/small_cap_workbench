@@ -486,6 +486,31 @@ class TestReports:
 class TestFactorAnalyzerFull:
     """完整因子分析流程测试。"""
 
+    def test_rank_ic_uses_full_orders_and_ends_at_next_scheduled_signal(self):
+        signal, next_signal, end = "2024-01-12", "2024-01-26", "2024-02-08"
+        market_data = {
+            symbol: pd.DataFrame({
+                "date": pd.to_datetime([signal, next_signal, end]),
+                "market_cap": rank * 1e8,
+                "close": [100, 100 + rank, 104 - rank],
+            })
+            for rank, symbol in enumerate(["SZ.000001", "SZ.000002", "SZ.000003"], start=1)
+        }
+        result = FactorAnalyzer().analyze_full(
+            backtest_result={
+                "equity_curve_full": [{"date": end, "equity": 100_000}],
+                "orders": [],
+                "orders_full": [{"signal_date": signal, "symbol": symbol} for symbol in market_data],
+                "rebalance_signal_dates": [signal, next_signal],
+            },
+            market_data=market_data,
+            symbol_industry={},
+        )
+
+        assert len(result["rank_ic_series"]) == 1
+        assert result["rank_ic_series"][0]["signal_date"] == signal
+        assert result["rank_ic_series"][0]["ic"] == pytest.approx(1.0)
+
     def test_analyze_full_basic(self, sample_market_data, sample_backtest_result):
         """测试完整分析流程。"""
         analyzer = FactorAnalyzer()

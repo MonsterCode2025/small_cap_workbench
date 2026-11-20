@@ -80,7 +80,7 @@ class FactorAnalyzer:
         """计算 Rank IC（市值因子与收益的秩相关）。
 
         Args:
-            signal_date: 信号日期（月末）
+            signal_date: 调仓信号日期
             candidates: 候选股票列表，已按市值升序排列
             returns: 持股期间的收益 {symbol: return}
 
@@ -357,9 +357,9 @@ class FactorAnalyzer:
             "summary": {}
         }
 
-        equity = backtest_result.get("equity_curve", backtest_result.get("equity", []))
-        orders = backtest_result.get("orders", [])
-        trades = backtest_result.get("trades", [])
+        equity = backtest_result.get("equity_curve_full", backtest_result.get("equity_curve", backtest_result.get("equity", [])))
+        orders = backtest_result.get("orders_full", backtest_result.get("orders", []))
+        trades = backtest_result.get("trades_full", backtest_result.get("trades", []))
 
         if not equity or not orders:
             print(f"[因子分析] 数据不足：equity={len(equity)}, orders={len(orders)}")
@@ -367,11 +367,11 @@ class FactorAnalyzer:
 
         print(f"[因子分析] 开始分析：equity={len(equity)}, orders={len(orders)}, trades={len(trades)}")
 
-        # 1. 构建月末调仓日期列表和对应的订单数据
+        # 1. 构建调仓日期列表和对应的订单数据
         equity_df = pd.DataFrame(equity)
         equity_df["date"] = pd.to_datetime(equity_df["date"])
 
-        # 从订单中获取所有月末信号日期
+        # 从订单中获取有交易意图的信号日期
         signal_dates = {}  # {signal_date: [orders]}
         for order in orders:
             sig_date = order.get("signal_date")
@@ -380,19 +380,20 @@ class FactorAnalyzer:
                     signal_dates[sig_date] = []
                 signal_dates[sig_date].append(order)
 
-        print(f"[因子分析] 找到 {len(signal_dates)} 个月末信号日期")
+        print(f"[因子分析] 找到 {len(signal_dates)} 个有订单的调仓信号日期")
 
         if not signal_dates:
             return result
 
-        # 2. 对每个月末调仓日期计算 IC
+        # 2. 对有订单的调仓日期计算 IC，以实际调仓日程确定持有区间。
         sorted_signal_dates = sorted(signal_dates.keys())
-        for i, signal_date in enumerate(sorted_signal_dates):
-            # 获取该月末调仓的候选股票
-            month_orders = signal_dates[signal_date]
-            candidates_dict = {}  # {symbol: info}
+        scheduled_dates = sorted(set(backtest_result.get("rebalance_signal_dates", [])) | signal_dates.keys())
+        for i, signal_date in enumerate(scheduled_dates):
+            if signal_date not in signal_dates:
+                continue
 
-            for order in month_orders:
+            candidates_dict = {}  # {symbol: info}
+            for order in signal_dates[signal_date]:
                 symbol = order.get("symbol")
                 if not symbol or symbol not in market_data:
                     continue
@@ -439,8 +440,8 @@ class FactorAnalyzer:
             ]
 
             # 获取后续持股期间的收益
-            if i < len(sorted_signal_dates) - 1:
-                next_signal_date = sorted_signal_dates[i + 1]
+            if i < len(scheduled_dates) - 1:
+                next_signal_date = scheduled_dates[i + 1]
                 end_date = next_signal_date
             else:
                 end_date = equity_df["date"].max().strftime("%Y-%m-%d")
@@ -475,15 +476,15 @@ class FactorAnalyzer:
                     "sample_size": ic_result.sample_size,
                 })
 
-        print(f"[因子分析] 计算 IC 完成：{len(result['rank_ic_series'])} 个月末信号")
+        print(f"[因子分析] 计算 IC 完成：{len(result['rank_ic_series'])} 个调仓信号")
 
         # 3. 计算整个回测期的五分组收益
         all_candidates = []
 
         for signal_date in sorted_signal_dates:
-            month_orders = signal_dates[signal_date]
+            signal_orders = signal_dates[signal_date]
 
-            for order in month_orders:
+            for order in signal_orders:
                 symbol = order.get("symbol")
                 if not symbol or symbol not in market_data:
                     continue

@@ -5,6 +5,35 @@ from backend.portfolio import Portfolio, FeeConfig
 import pandas as pd
 
 
+def test_backtest_rebalances_every_two_calendar_weeks_on_next_trading_day():
+    from backend.backtest import BacktestEngine
+
+    # 周五与下周一休市，信号使用周四，执行顺延到周二。
+    trading_dates = [
+        "2024-01-04", "2024-01-05", "2024-01-11",
+        "2024-01-16", "2024-01-19", "2024-01-26",
+        "2024-01-29", "2024-02-09", "2024-02-12",
+    ]
+    universe = {day: pd.DataFrame({"symbol": []}) for day in trading_dates}
+    symbol = "SZ.000001"
+    universe["2024-01-11"] = pd.DataFrame({"symbol": [symbol]})
+    market_data = {symbol: pd.DataFrame({
+        "date": pd.to_datetime(trading_dates),
+        "open": 10.0,
+        "close": 10.0,
+        "volume": 1_000_000,
+    })}
+    engine = BacktestEngine(SelectionConfig(min_adv20=0, max_percentile=1.0))
+
+    result = engine.run(trading_dates, universe, market_data, "2024-01-04", "2024-02-09")
+
+    assert result["rebalance_signal_dates"] == ["2024-01-11", "2024-01-26"]
+    assert [(order["signal_date"], order["date"]) for order in result["orders"]] == [
+        ("2024-01-11", "2024-01-16"),
+        ("2024-01-26", "2024-01-29"),
+    ]
+
+
 class TestSelection:
     """测试选股模块。"""
 

@@ -5,13 +5,16 @@
 from __future__ import annotations
 
 import pandas as pd
-from datetime import datetime
-from pathlib import Path
-from typing import Literal
+from datetime import date as Date
 
-from .data import UniverseBuilder, fetch_daily_quotes, calculate_adv20
+from .data import calculate_adv20
 from .selection import SmallCapSelector, SelectionConfig
 from .portfolio import Portfolio, FeeConfig
+
+
+# 固定周一起点，保证同一日期的调仓周期不随回测区间改变。
+REBALANCE_ANCHOR = Date(2024, 1, 1)
+REBALANCE_INTERVAL_WEEKS = 2
 
 
 class BacktestEngine:
@@ -48,29 +51,24 @@ class BacktestEngine:
         Returns:
             回测结果字典
         """
-        # 获取月末日期
-        builder = UniverseBuilder(pd.DataFrame({"trade_date": pd.to_datetime(trading_dates)}))
-        month_ends = builder.get_month_ends(start_date, end_date)
-
-        # 初始化
-        rebalance_dates = {me: trading_dates[trading_dates.index(me) + 1]
-                          for me in month_ends if trading_dates.index(me) < len(trading_dates) - 1}
+        trading_dates = [day for day in trading_dates if start_date <= day <= end_date]
+        interval_days = 7 * REBALANCE_INTERVAL_WEEKS
+        periods = [
+            (Date.fromisoformat(day) - REBALANCE_ANCHOR).days // interval_days
+            for day in trading_dates
+        ]
+        # 在新周期的首个交易日开盘执行上个周期的收盘信号。
+        signal_by_execution = {
+            trading_dates[i]: trading_dates[i - 1]
+            for i in range(1, len(trading_dates))
+            if periods[i] != periods[i - 1]
+        }
 
         current_targets = {}
 
         # 主循环
         for date in trading_dates:
-            if date < start_date:
-                continue
-            if date > end_date:
-                break
-
-            # 检查是否是调仓日的次日（执行日）
-            signal_date = None
-            for me, exec_date in rebalance_dates.items():
-                if date == exec_date:
-                    signal_date = me
-                    break
+            signal_date = signal_by_execution.get(date)
 
             if signal_date:
                 # 执行调仓逻辑
@@ -183,6 +181,7 @@ class BacktestEngine:
             "equity": equity_records,
             "trades": trade_records,
             "orders": order_records,
+            "rebalance_signal_dates": list(signal_by_execution.values()),
             "config": {
                 "selection": self.selection_config.__dict__,
                 "initial_cash": self.portfolio.initial_cash,

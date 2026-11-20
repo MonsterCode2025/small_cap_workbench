@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from .data import OUTPUT_ROOT, SHANGHAI, write_json
 from .selection import SelectionConfig
 from .portfolio import FeeConfig
-from .backtest import BacktestEngine
+from .backtest import BacktestEngine, REBALANCE_INTERVAL_WEEKS
 from .data_loader import DataLoader
 from .data_audit import DataAuditor
 from .period_manager import PeriodManager
@@ -209,7 +209,8 @@ def run_backtest(request: BacktestRequest):
                 "selection": selection_config.__dict__,
                 "slippage_bps": request.slippage_bps,
                 "stock_filter": request.stock_filter,
-                "max_symbols": request.max_symbols
+                "max_symbols": request.max_symbols,
+                "rebalance_interval_weeks": REBALANCE_INTERVAL_WEEKS,
             },
             "data_summary": data["summary"],
             "summary": backtest_result["summary"],
@@ -227,7 +228,8 @@ def run_backtest(request: BacktestRequest):
             **result,
             "equity_curve_full": backtest_result["equity"],
             "trades_full": backtest_result["trades"],
-            "orders_full": backtest_result["orders"]
+            "orders_full": backtest_result["orders"],
+            "rebalance_signal_dates": backtest_result["rebalance_signal_dates"],
         })
 
         return {**result, "equity_curve": backtest_result["equity"]}
