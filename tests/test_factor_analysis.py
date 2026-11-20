@@ -2,6 +2,7 @@
 import pytest
 import pandas as pd
 import numpy as np
+from datetime import datetime, timedelta
 from backend.factor_analysis import (
     FactorAnalyzer,
     RankICResult,
@@ -11,6 +12,101 @@ from backend.factor_analysis import (
     GroupStats,
 )
 from backend.selection import StockCandidate
+
+
+# Fixtures
+@pytest.fixture
+def sample_market_data():
+    """生成样本市场数据。"""
+    symbols = [f"SZ.{str(i).zfill(6)}" for i in range(1, 11)]
+    dates = pd.date_range("2024-01-01", "2024-03-31", freq="D")
+
+    market_data = {}
+    for symbol in symbols:
+        data = []
+        base_price = 10.0 + float(symbols.index(symbol))
+
+        for date in dates:
+            # 生成随机行情数据
+            daily_return = np.random.normal(0.0005, 0.02)
+            close = base_price * (1 + daily_return)
+            open_price = close * (1 + np.random.normal(0, 0.01))
+
+            data.append({
+                "date": date.strftime("%Y-%m-%d"),
+                "open": open_price,
+                "close": close,
+                "high": close * 1.02,
+                "low": close * 0.98,
+                "volume": 1e6,
+                "market_cap": close * 1e8,
+                "adv20": 20e6,
+            })
+            base_price = close
+
+        df = pd.DataFrame(data)
+        df["date"] = pd.to_datetime(df["date"])
+        market_data[symbol] = df
+
+    return market_data
+
+
+@pytest.fixture
+def sample_backtest_result():
+    """生成样本回测结果。"""
+    return {
+        "equity": [
+            {
+                "date": "2024-01-31",
+                "equity": 1000000,
+                "cash": 100000,
+                "positions": [
+                    {"symbol": "SZ.000001", "shares": 1000},
+                    {"symbol": "SZ.000002", "shares": 1000},
+                ]
+            },
+            {
+                "date": "2024-02-29",
+                "equity": 1050000,
+                "cash": 150000,
+                "positions": [
+                    {"symbol": "SZ.000001", "shares": 1000},
+                    {"symbol": "SZ.000002", "shares": 1000},
+                ]
+            },
+            {
+                "date": "2024-03-31",
+                "equity": 1100000,
+                "cash": 200000,
+                "positions": [
+                    {"symbol": "SZ.000001", "shares": 900},
+                    {"symbol": "SZ.000003", "shares": 1000},
+                ]
+            },
+        ],
+        "orders": [
+            {
+                "date": "2024-01-31",
+                "signal_date": "2024-01-31",
+                "symbol": "SZ.000001",
+                "side": "buy",
+                "target_shares": 1000,
+                "filled_shares": 1000,
+                "status": "filled",
+            },
+            {
+                "date": "2024-01-31",
+                "signal_date": "2024-01-31",
+                "symbol": "SZ.000002",
+                "side": "buy",
+                "target_shares": 1000,
+                "filled_shares": 1000,
+                "status": "filled",
+            },
+        ],
+        "trades": [],
+        "summary": {},
+    }
 
 
 class TestRankIC:
@@ -260,3 +356,107 @@ class TestAlpha:
 
         assert result.total_excess_return == 0.0
         assert result.alpha_ratio == 0.0
+
+
+class TestReports:
+    """报告生成测试。"""
+
+    def test_report_json_generation(self):
+        """测试 JSON 报告生成。"""
+        from backend.reports import AnalysisReport
+
+        analysis_result = {
+            "rank_ic_series": [
+                {"signal_date": "2024-01-31", "ic": 0.15, "p_value": 0.08, "sample_size": 30},
+                {"signal_date": "2024-02-29", "ic": 0.22, "p_value": 0.03, "sample_size": 30},
+            ],
+            "group_returns": {
+                "groups": {
+                    1: {
+                        "group_id": 1,
+                        "avg_return": 0.05,
+                        "cumulative_return": 0.65,
+                        "symbols_count": 6,
+                        "avg_market_cap": 1e8,
+                    },
+                    2: {
+                        "group_id": 2,
+                        "avg_return": 0.03,
+                        "cumulative_return": 0.40,
+                        "symbols_count": 6,
+                        "avg_market_cap": 2e8,
+                    },
+                },
+                "monotonicity_check": True,
+                "group1_excess_return": 0.02,
+            },
+            "exposure": {
+                "strategy_industry_weights": {"C34": 1.0},
+                "benchmark_industry_weights": {"C34": 0.5},
+                "industry_overweight": {"C34": 0.5},
+            },
+            "alpha": {
+                "total_excess_return": 0.05,
+                "industry_attribution": 0.02,
+                "security_selection_alpha": 0.03,
+                "alpha_ratio": 0.6,
+            },
+        }
+
+        report = AnalysisReport(analysis_result)
+        json_str = report.to_json()
+
+        # 验证 JSON 格式
+        import json
+        json_obj = json.loads(json_str)
+        assert "timestamp" in json_obj
+        assert "analysis" in json_obj
+        assert "rank_ic_series" in json_obj["analysis"]
+
+    def test_report_html_generation(self):
+        """测试 HTML 报告生成。"""
+        from backend.reports import AnalysisReport
+
+        analysis_result = {
+            "rank_ic_series": [
+                {"signal_date": "2024-01-31", "ic": 0.15, "p_value": 0.08, "sample_size": 30},
+            ],
+            "group_returns": {
+                "groups": {
+                    1: {
+                        "group_id": 1,
+                        "avg_return": 0.05,
+                        "cumulative_return": 0.65,
+                        "symbols_count": 6,
+                        "avg_market_cap": 1e8,
+                    },
+                    2: {
+                        "group_id": 2,
+                        "avg_return": 0.03,
+                        "cumulative_return": 0.40,
+                        "symbols_count": 6,
+                        "avg_market_cap": 2e8,
+                    },
+                },
+                "monotonicity_check": True,
+                "group1_excess_return": 0.02,
+            },
+            "exposure": {
+                "strategy_industry_weights": {"C34": 1.0},
+                "benchmark_industry_weights": {"C34": 0.5},
+            },
+            "alpha": {
+                "total_excess_return": 0.05,
+                "security_selection_alpha": 0.03,
+                "alpha_ratio": 0.6,
+            },
+        }
+
+        report = AnalysisReport(analysis_result)
+        html_str = report.to_html()
+
+        # 验证 HTML 格式
+        assert "<html>" in html_str.lower()
+        assert "因子分析" in html_str
+        assert "Rank IC" in html_str or "IC" in html_str
+        assert "<table" in html_str
