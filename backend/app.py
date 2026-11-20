@@ -19,6 +19,8 @@ from .backtest import BacktestEngine
 from .data_loader import DataLoader
 from .data_audit import DataAuditor
 from .period_manager import PeriodManager
+from .factor_analysis import FactorAnalyzer
+from .reports import AnalysisReport
 
 OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -54,6 +56,12 @@ class BacktestRequest(BaseModel):
     commission_rate: float = Field(0.0003, ge=0, le=0.01)
     stock_filter: str = Field("mainboard", description="股票过滤: all/mainboard/sample")
     max_symbols: int | None = Field(None, description="最大股票数限制，None表示不限制")
+
+
+class FactorAnalysisRequest(BaseModel):
+    """因子分析请求。"""
+    experiment_id: str = Field(..., description="关联的回测实验ID")
+    include_html_report: bool = Field(True, description="是否生成HTML报告")
 
 
 @app.get("/api/health")
@@ -244,6 +252,97 @@ def get_experiment(experiment_id: str):
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"读取实验失败: {e}")
+
+
+@app.post("/api/factor-analysis")
+def run_factor_analysis(request: FactorAnalysisRequest):
+    """运行因子分析。
+
+    对关联的回测实验进行 IC、分组收益、暴露和 Alpha 分析，
+    并生成 JSON 和 HTML 报告。
+    """
+    try:
+        # 读取对应的回测结果
+        result_path = OUTPUT_ROOT / request.experiment_id / "full_result.json"
+
+        if not result_path.exists():
+            raise HTTPException(status_code=404, detail=f"实验不存在: {request.experiment_id}")
+
+        backtest_result = json.loads(result_path.read_text(encoding="utf-8"))
+
+        # 重新加载市场数据
+        start_date = backtest_result["config"]["start_date"]
+        end_date = backtest_result["config"]["end_date"]
+
+        print(f"\n{'='*60}")
+        print(f"[因子分析 {request.experiment_id[:8]}] 开始分析")
+        print(f"{'='*60}")
+
+        loader = DataLoader()
+        data = loader.load_backtest_data(
+            start_date=start_date,
+            end_date=end_date,
+            stock_filter=backtest_result["config"].get("stock_filter", "mainboard"),
+            max_symbols=backtest_result["config"].get("max_symbols"),
+            use_cache=True
+        )
+
+        # 执行因子分析
+        analyzer = FactorAnalyzer()
+
+        # 构造简单的行业映射（默认所有为同一行业）
+        symbol_industry = {
+            s: "C34" for s in data["market_data"].keys()
+        }
+
+        analysis_result = analyzer.analyze_full(
+            backtest_result=backtest_result,
+            market_data=data["market_data"],
+            symbol_industry=symbol_industry
+        )
+
+        print(f"[因子分析完成] IC样本数: {len(analysis_result.get('rank_ic_series', []))}")
+
+        # 生成报告
+        report = AnalysisReport(analysis_result)
+
+        # 创建输出目录
+        output_dir = OUTPUT_ROOT / request.experiment_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # 保存 JSON 报告
+        json_report_path = output_dir / "factor_analysis.json"
+        report.save_json(json_report_path)
+
+        # 如果需要，保存 HTML 报告
+        if request.include_html_report:
+            html_report_path = output_dir / "factor_report.html"
+            report.save_html(html_report_path)
+
+        # 构建响应
+        response = {
+            "success": True,
+            "experiment_id": request.experiment_id,
+            "analysis": analysis_result,
+            "report_paths": {
+                "json": str(json_report_path.relative_to(Path.cwd())),
+            }
+        }
+
+        if request.include_html_report:
+            response["report_paths"]["html"] = str(html_report_path.relative_to(Path.cwd()))
+
+        print(f"{'='*60}\n")
+
+        return response
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        error_detail = f"{str(e)}\n\n{traceback.format_exc()}"
+        print(f"\n[因子分析错误] {error_detail}")
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 if __name__ == "__main__":

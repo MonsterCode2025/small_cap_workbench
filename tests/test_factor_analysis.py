@@ -460,3 +460,34 @@ class TestReports:
         assert "因子分析" in html_str
         assert "Rank IC" in html_str or "IC" in html_str
         assert "<table" in html_str
+
+
+class TestFactorAnalyzerFull:
+    """完整因子分析流程测试。"""
+
+    def test_analyze_full_basic(self, sample_market_data, sample_backtest_result):
+        """测试完整分析流程。"""
+        analyzer = FactorAnalyzer()
+
+        symbol_industry = {s: "C34" for s in sample_market_data.keys()}
+
+        result = analyzer.analyze_full(
+            backtest_result=sample_backtest_result,
+            market_data=sample_market_data,
+            symbol_industry=symbol_industry
+        )
+
+        # 验证返回结构
+        assert "rank_ic_series" in result
+        assert "group_returns" in result
+        assert "exposure" in result
+        assert "alpha" in result
+        assert "summary" in result
+
+        # 验证 IC 数据
+        assert isinstance(result["rank_ic_series"], list)
+        if result["rank_ic_series"]:
+            ic_item = result["rank_ic_series"][0]
+            assert "signal_date" in ic_item
+            assert "ic" in ic_item
+            assert "p_value" in ic_item
