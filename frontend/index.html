@@ -318,6 +318,15 @@
                 <button type="submit" id="runButton">运行回测</button>
             </form>
 
+            <form id="loadExperimentForm" style="margin-top: 20px;">
+                <div class="form-group">
+                    <label for="loadExperimentId">历史回测实验 ID</label>
+                    <input type="text" id="loadExperimentId" required placeholder="输入已保存的回测实验 ID">
+                </div>
+                <button type="submit" id="loadExperimentButton">查看回测结果</button>
+                <p id="loadExperimentStatus" role="status"></p>
+            </form>
+
             <div class="info-box">
                 <h3>V1基线策略说明</h3>
                 <ul>
@@ -371,6 +380,152 @@
             </div>
         </div>
 
+        <!-- 因子分析卡片 -->
+        <div class="card">
+            <h2>🔬 因子分析</h2>
+            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                基于回测结果进行深度因子分析，包括Rank IC、分组收益、因子暴露、Alpha分解
+            </p>
+
+            <div class="form-group">
+                <label for="factorExperimentId">回测实验ID</label>
+                <input type="text" id="factorExperimentId" placeholder="从上方回测结果中复制experiment_id">
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                <div class="form-group">
+                    <label for="includeHtmlReport" style="display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="includeHtmlReport" checked style="width: auto;">
+                        生成HTML报告
+                    </label>
+                </div>
+            </div>
+
+            <button type="button" id="runFactorAnalysis">运行因子分析</button>
+
+            <div id="factorResult" style="display: none; margin-top: 25px;">
+                <h3 style="font-size: 16px; margin-bottom: 15px;">分析结果</h3>
+
+                <!-- Rank IC -->
+                <div style="margin-bottom: 30px;">
+                    <h4 style="font-size: 14px; font-weight: 500; margin-bottom: 10px;">Rank IC 时间序列</h4>
+                    <div id="rankIcMetrics" class="metrics" style="margin-bottom: 15px;"></div>
+                    <div id="rankIcChart" style="width: 100%; height: 300px;"></div>
+                </div>
+
+                <!-- 分组收益 -->
+                <div style="margin-bottom: 30px;">
+                    <h4 style="font-size: 14px; font-weight: 500; margin-bottom: 10px;">五分组收益分析</h4>
+                    <div id="groupReturnsChart" style="width: 100%; height: 300px;"></div>
+                    <div id="groupReturnsMetrics" style="margin-top: 15px;"></div>
+                </div>
+
+                <!-- 因子暴露 -->
+                <div style="margin-bottom: 30px;">
+                    <h4 style="font-size: 14px; font-weight: 500; margin-bottom: 10px;">因子暴露分析</h4>
+                    <div id="exposureMetrics" class="metrics"></div>
+                </div>
+
+                <!-- Alpha分解 -->
+                <div style="margin-bottom: 30px;">
+                    <h4 style="font-size: 14px; font-weight: 500; margin-bottom: 10px;">行业中性Alpha分解</h4>
+                    <div id="alphaChart" style="width: 100%; height: 300px;"></div>
+                    <div id="alphaMetrics" class="metrics" style="margin-top: 15px;"></div>
+                </div>
+
+                <!-- 报告链接 -->
+                <div id="reportLinks" style="background: #d4edda; border: 1px solid #28a745; padding: 15px; border-radius: 6px; color: #155724;"></div>
+            </div>
+
+            <div class="info-box" style="margin-top: 20px;">
+                <h3>使用说明</h3>
+                <ul>
+                    <li>1. 先运行上方的回测，获取experiment_id</li>
+                    <li>2. 复制experiment_id到上方输入框</li>
+                    <li>3. 点击"运行因子分析"按钮</li>
+                    <li>4. 生成的HTML报告位置：outputs/{experiment_id}/factor_report.html</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 数据审计卡片 -->
+        <div class="card">
+            <h2>✓ 数据审计</h2>
+            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                验证历史数据的完整性和可靠性，包括交易日历、股票池、市场数据
+            </p>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="auditStartDate">审计开始日期</label>
+                    <input type="date" id="auditStartDate" value="2023-01-01" required>
+                </div>
+                <div class="form-group">
+                    <label for="auditEndDate">审计结束日期</label>
+                    <input type="date" id="auditEndDate" value="2024-12-31" required>
+                </div>
+            </div>
+
+            <button type="button" id="runAudit">运行审计</button>
+
+            <div id="auditResult" style="display: none; margin-top: 25px;">
+                <h3 style="font-size: 16px; margin-bottom: 15px;">审计结果</h3>
+
+                <div style="margin-bottom: 20px;">
+                    <div id="auditStatus" style="font-size: 14px; font-weight: 500; margin-bottom: 10px;"></div>
+                    <div id="auditSummary" style="background: #f8f9fa; padding: 15px; border-radius: 6px;"></div>
+                </div>
+
+                <div id="auditDetails" style="background: #f8f9fa; padding: 15px; border-radius: 6px;"></div>
+            </div>
+
+            <div class="info-box" style="margin-top: 20px;">
+                <h3>审计标准</h3>
+                <ul>
+                    <li>交易日历：≥200个交易日</li>
+                    <li>股票池：≥1000只股票</li>
+                    <li>数据可用性：≥70%成功率</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 区间管理卡片 -->
+        <div class="card">
+            <h2>📅 区间管理</h2>
+            <p style="color: #666; font-size: 14px; margin-bottom: 15px;">
+                管理研究/验证/封存区间，避免过拟合。区间锁定后不可修改。
+            </p>
+
+            <button type="button" id="listPeriods" style="margin-bottom: 15px;">刷新区间列表</button>
+
+            <div id="periodsTable" style="overflow-x: auto;"></div>
+
+            <div style="margin-top: 20px;">
+                <h3 style="font-size: 14px; font-weight: 500; margin-bottom: 10px;">锁定区间</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="periodToLock">选择区间</label>
+                        <select id="periodToLock" required>
+                            <option value="">-- 选择要锁定的区间 --</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: flex-end;">
+                        <button type="button" id="lockPeriodBtn" style="width: 100%;">锁定区间</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-box" style="margin-top: 20px;">
+                <h3>区间说明</h3>
+                <ul>
+                    <li><strong>research</strong>：研究区间，用于策略开发和调参</li>
+                    <li><strong>validation</strong>：验证区间，独立验证策略效果</li>
+                    <li><strong>reserved</strong>：封存区间，样本外测试（谨慎使用）</li>
+                    <li><strong>locked</strong>：✓ 已锁定，防止误修改</li>
+                </ul>
+            </div>
+        </div>
+
         <div class="card">
             <h2>开发进度</h2>
             <div class="metrics">
@@ -384,7 +539,7 @@
                 </div>
                 <div class="metric">
                     <div class="metric-label">阶段三：因子分析</div>
-                    <div class="metric-value">0%</div>
+                    <div class="metric-value">100%</div>
                 </div>
                 <div class="metric">
                     <div class="metric-label">阶段四：增强迭代</div>
@@ -432,14 +587,16 @@
             // 1. 渲染汇总指标
             renderSummaryMetrics(result.summary);
 
+            const equityCurve = result.equity_curve || [];
+
             // 2. 渲染权益曲线
-            renderEquityChart(result.equity_curve || []);
+            renderEquityChart(equityCurve);
 
             // 3. 渲染回撤曲线
-            renderDrawdownChart(result.equity_curve || []);
+            renderDrawdownChart(equityCurve);
 
             // 4. 渲染月度收益
-            renderMonthlyReturns(result.equity_curve || []);
+            renderMonthlyReturns(equityCurve);
 
             // 5. 渲染交易记录
             renderTradesTable(result.trades || []);
@@ -710,6 +867,33 @@
             document.getElementById('tradesTable').innerHTML = html;
         }
 
+        document.getElementById('loadExperimentForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const experimentId = document.getElementById('loadExperimentId').value.trim();
+            const status = document.getElementById('loadExperimentStatus');
+            if (!experimentId) {
+                status.textContent = '请输入回测实验 ID';
+                return;
+            }
+
+            const button = document.getElementById('loadExperimentButton');
+            button.disabled = true;
+            status.textContent = '正在读取回测结果…';
+            try {
+                const response = await fetch(`${API_BASE}/api/experiments/${encodeURIComponent(experimentId)}`);
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.detail || '读取回测失败');
+
+                renderBacktestResult(result);
+                status.textContent = '';
+                document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+            } catch (error) {
+                status.textContent = error.message;
+            } finally {
+                button.disabled = false;
+            }
+        });
+
         // 表单提交
         document.getElementById('backtestForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -778,7 +962,371 @@
             }
         }
 
-        checkHealth();
+        // 因子分析
+        document.getElementById('runFactorAnalysis').addEventListener('click', async () => {
+            const experimentId = document.getElementById('factorExperimentId').value.trim();
+            if (!experimentId) {
+                alert('请输入回测实验ID');
+                return;
+            }
+
+            const button = document.getElementById('runFactorAnalysis');
+            button.disabled = true;
+            button.textContent = '分析中...';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/factor-analysis`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        experiment_id: experimentId,
+                        include_html_report: document.getElementById('includeHtmlReport').checked
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    document.getElementById('factorResult').style.display = 'block';
+                    renderFactorAnalysis(result.analysis, result.report_paths);
+                    document.getElementById('factorResult').scrollIntoView({ behavior: 'smooth' });
+                } else {
+                    alert('分析失败：' + (result.detail || result.message || response.status));
+                }
+            } catch (error) {
+                alert('请求失败：' + error.message);
+            } finally {
+                button.disabled = false;
+                button.textContent = '运行因子分析';
+            }
+        });
+
+        // 渲染因子分析结果
+        function renderFactorAnalysis(analysis, reportPaths) {
+            // 1. Rank IC
+            const rankIc = analysis.rank_ic_series || [];
+            const icValues = rankIc.map(d => d.ic);
+            const meanIc = icValues.length ? icValues.reduce((a, b) => a + b, 0) / icValues.length : null;
+            const icStd = icValues.length > 1
+                ? Math.sqrt(icValues.reduce((d, v) => d + Math.pow(v - meanIc, 2), 0) / icValues.length)
+                : null;
+            const icTStat = icStd > 0 ? meanIc / icStd : null;
+
+            document.getElementById('rankIcMetrics').innerHTML = `
+                <div class="metric">
+                    <div class="metric-label">平均 IC</div>
+                    <div class="metric-value" style="color: ${meanIc > 0 ? '#27ae60' : '#e74c3c'}">${meanIc?.toFixed(4) ?? '—'}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">IC 标准差</div>
+                    <div class="metric-value">${icStd?.toFixed(4) ?? '—'}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">IC T-Stat</div>
+                    <div class="metric-value" style="color: ${Math.abs(icTStat) > 2 ? '#27ae60' : '#e74c3c'}">${icTStat?.toFixed(2) ?? '—'}</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">样本数</div>
+                    <div class="metric-value">${rankIc.length}</div>
+                </div>
+            `;
+
+            // IC时间序列图
+            const rankIcChart = document.getElementById('rankIcChart');
+            const chart1 = echarts.getInstanceByDom(rankIcChart) || echarts.init(rankIcChart);
+            const option1 = {
+                tooltip: { trigger: 'axis' },
+                grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                xAxis: { type: 'category', data: rankIc.map(d => d.signal_date) },
+                yAxis: { type: 'value' },
+                series: [{
+                    name: 'IC',
+                    type: 'line',
+                    smooth: true,
+                    data: rankIc.map(d => d.ic),
+                    itemStyle: { color: '#3498db' }
+                }]
+            };
+            chart1.setOption(option1);
+
+            // 2. 分组收益
+            const groups = analysis.group_returns?.groups ?? {};
+            const groupChartElement = document.getElementById('groupReturnsChart');
+            const groupLabels = Object.keys(groups).sort();
+            const hasGroups = groupLabels.length > 0;
+            groupChartElement.hidden = !hasGroups;
+            const returns = groupLabels.map(k => (groups[k].avg_return * 100).toFixed(2));
+
+            const option2 = {
+                tooltip: { trigger: 'axis' },
+                grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
+                xAxis: { type: 'category', data: groupLabels.map(k => `第${k}组`) },
+                yAxis: { type: 'value', axisLabel: { formatter: '{value}%' } },
+                series: [{
+                    name: '平均收益',
+                    type: 'bar',
+                    data: returns,
+                    itemStyle: {
+                        color: function(params) {
+                            return params.value >= 0 ? '#27ae60' : '#e74c3c';
+                        }
+                    }
+                }]
+            };
+            if (hasGroups) {
+                const groupChart = echarts.getInstanceByDom(groupChartElement) || echarts.init(groupChartElement);
+                groupChart.setOption(option2);
+            }
+
+            const passed = analysis.group_returns?.monotonicity_check;
+            const monotonicity = passed ? '✓ 通过' : '✗ 未通过';
+            const excess = ((analysis.group_returns?.group1_excess_return ?? 0) * 100).toFixed(2);
+            document.getElementById('groupReturnsMetrics').innerHTML = hasGroups ? `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="metric">
+                        <div class="metric-label">单调性检验</div>
+                        <div class="metric-value" style="color: ${passed ? '#27ae60' : '#e74c3c'}">${monotonicity}</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">第1组超额收益</div>
+                        <div class="metric-value" style="color: ${excess > 0 ? '#27ae60' : '#e74c3c'}">${excess}%</div>
+                    </div>
+                </div>
+            ` : '暂无分组收益数据';
+
+            // 3. 因子暴露
+            const exposure = analysis.exposure;
+            document.getElementById('exposureMetrics').innerHTML = exposure ? `
+                <div class="metric">
+                    <div class="metric-label">策略平均市值</div>
+                    <div class="metric-value">${(exposure.avg_market_cap / 1e8).toFixed(2)}亿</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">基准平均市值</div>
+                    <div class="metric-value">${(exposure.benchmark_avg_market_cap / 1e8).toFixed(2)}亿</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">策略平均ADV20</div>
+                    <div class="metric-value">${(exposure.avg_adv / 1e7).toFixed(1)}千万</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">基准平均ADV20</div>
+                    <div class="metric-value">${(exposure.benchmark_avg_adv / 1e7).toFixed(1)}千万</div>
+                </div>
+            ` : '暂无因子暴露数据';
+
+            // 4. Alpha分解
+            const alpha = analysis.alpha;
+            const alphaChartElement = document.getElementById('alphaChart');
+            alphaChartElement.hidden = !alpha;
+            if (alpha) {
+                const alphaChart = echarts.getInstanceByDom(alphaChartElement) || echarts.init(alphaChartElement);
+                alphaChart.setOption({
+                    tooltip: { trigger: 'item', formatter: '{b}: {c}%' },
+                    series: [{
+                        name: 'Alpha分解',
+                        type: 'pie',
+                        radius: '50%',
+                        data: [
+                            { value: (alpha.industry_attribution * 100).toFixed(2), name: '行业配置贡献' },
+                            { value: (alpha.security_selection_alpha * 100).toFixed(2), name: '选股Alpha' }
+                        ],
+                        itemStyle: {
+                            color: function(params) {
+                                const colors = ['#3498db', '#27ae60'];
+                                return colors[params.dataIndex];
+                            }
+                        }
+                    }]
+                });
+            }
+
+            document.getElementById('alphaMetrics').innerHTML = alpha ? `
+                <div class="metric">
+                    <div class="metric-label">总超额收益</div>
+                    <div class="metric-value" style="color: ${alpha.total_excess_return >= 0 ? '#27ae60' : '#e74c3c'}">${(alpha.total_excess_return * 100).toFixed(2)}%</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">行业贡献</div>
+                    <div class="metric-value">${(alpha.industry_attribution * 100).toFixed(2)}%</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">选股Alpha</div>
+                    <div class="metric-value" style="color: ${alpha.security_selection_alpha >= 0 ? '#27ae60' : '#e74c3c'}">${(alpha.security_selection_alpha * 100).toFixed(2)}%</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Alpha比率</div>
+                    <div class="metric-value">${(alpha.alpha_ratio * 100).toFixed(1)}%</div>
+                </div>
+            ` : '暂无 Alpha 分解数据';
+
+            // 报告链接
+            document.getElementById('reportLinks').innerHTML = `
+                <strong>✓ 分析完成</strong><br>
+                <ul style="margin-left: 20px; margin-top: 10px;">
+                    <li>JSON报告：<code>${reportPaths.json}</code></li>
+                    ${reportPaths.html ? `<li>HTML报告：<code>${reportPaths.html}</code></li>` : ''}
+                </ul>
+            `;
+        }
+
+        // 数据审计
+        document.getElementById('runAudit').addEventListener('click', async () => {
+            const startDate = document.getElementById('auditStartDate').value;
+            const endDate = document.getElementById('auditEndDate').value;
+
+            const button = document.getElementById('runAudit');
+            button.disabled = true;
+            button.textContent = '审计中...';
+
+            try {
+                const response = await fetch(
+                    `${API_BASE}/api/audit?start_date=${startDate}&end_date=${endDate}`
+                );
+                const result = await response.json();
+                renderAuditResult(result);
+                document.getElementById('auditResult').style.display = 'block';
+                document.getElementById('auditResult').scrollIntoView({ behavior: 'smooth' });
+            } catch (error) {
+                alert('请求失败：' + error.message);
+            } finally {
+                button.disabled = false;
+                button.textContent = '运行审计';
+            }
+        });
+
+        // 渲染审计结果
+        function renderAuditResult(result) {
+            const passed = result.passed;
+            const summary = result.summary;
+
+            document.getElementById('auditStatus').innerHTML = `
+                <strong style="color: ${passed ? '#27ae60' : '#e74c3c'};">
+                    ${passed ? '✓ 审计通过' : '✗ 审计未通过'}
+                </strong>
+            `;
+
+            document.getElementById('auditSummary').innerHTML = `
+                <p><strong>审计摘要</strong></p>
+                <ul style="margin-left: 20px; font-size: 13px;">
+                    <li>总检查数：${summary.total_checks}</li>
+                    <li>通过检查：${summary.passed_checks}/${summary.total_checks}</li>
+                    <li>交易日数：${summary.trading_days}</li>
+                    <li>股票总数：${summary.total_symbols}</li>
+                    <li>数据成功率：${(summary.data_success_rate * 100).toFixed(1)}%</li>
+                </ul>
+            `;
+
+            const details = result.results;
+            let detailsHtml = '<p><strong>详细检查结果</strong></p><ul style="margin-left: 20px; font-size: 13px;">';
+
+            ['trading_calendar', 'stock_universe', 'market_data'].forEach(key => {
+                const check = details[key];
+                const icon = check.passed ? '✓' : '✗';
+                const color = check.passed ? '#27ae60' : '#e74c3c';
+                detailsHtml += `<li style="color: ${color};">${icon} ${check.message}</li>`;
+            });
+
+            detailsHtml += '</ul>';
+            document.getElementById('auditDetails').innerHTML = detailsHtml;
+        }
+
+        // 区间管理
+        document.getElementById('listPeriods').addEventListener('click', async () => {
+            try {
+                const response = await fetch(`${API_BASE}/api/periods`);
+                const result = await response.json();
+                renderPeriodsTable(result);
+                updatePeriodSelect(result.periods);
+            } catch (error) {
+                alert('请求失败：' + error.message);
+            }
+        });
+
+        // 渲染区间表格
+        function renderPeriodsTable(result) {
+            const periods = result.periods;
+
+            const rows = periods.map(p => `
+                <tr>
+                    <td>${p.name}</td>
+                    <td>${p.start_date}</td>
+                    <td>${p.end_date}</td>
+                    <td><span style="background: ${p.purpose === 'research' ? '#e3f2fd' : p.purpose === 'validation' ? '#f3e5f5' : '#fff3e0'}; padding: 4px 8px; border-radius: 3px; font-size: 12px;">
+                        ${p.purpose}
+                    </span></td>
+                    <td style="text-align: center;">
+                        <span style="color: ${p.locked ? '#27ae60' : '#999'};">
+                            ${p.locked ? '✓ 已锁定' : '-'}
+                        </span>
+                    </td>
+                </tr>
+            `).join('');
+
+            const html = `
+                <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                    <thead>
+                        <tr style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                            <th style="padding: 10px; text-align: left;">区间名称</th>
+                            <th style="padding: 10px; text-align: left;">开始日期</th>
+                            <th style="padding: 10px; text-align: left;">结束日期</th>
+                            <th style="padding: 10px; text-align: left;">用途</th>
+                            <th style="padding: 10px; text-align: center;">状态</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            `;
+
+            document.getElementById('periodsTable').innerHTML = html;
+        }
+
+        // 更新区间选择
+        function updatePeriodSelect(periods) {
+            const select = document.getElementById('periodToLock');
+            const options = periods
+                .filter(p => !p.locked)
+                .map(p => `<option value="${p.name}">${p.name} (${p.purpose})</option>`)
+                .join('');
+            select.innerHTML = '<option value="">-- 选择要锁定的区间 --</option>' + options;
+        }
+
+        // 锁定区间
+        document.getElementById('lockPeriodBtn').addEventListener('click', async () => {
+            const periodName = document.getElementById('periodToLock').value;
+            if (!periodName) {
+                alert('请选择要锁定的区间');
+                return;
+            }
+
+            const button = document.getElementById('lockPeriodBtn');
+            button.disabled = true;
+            button.textContent = '锁定中...';
+
+            try {
+                const response = await fetch(
+                    `${API_BASE}/api/periods/lock?period_name=${periodName}`,
+                    { method: 'POST' }
+                );
+                const result = await response.json();
+
+                if (result.success) {
+                    alert(`✓ 区间 '${periodName}' 已成功锁定`);
+                    document.getElementById('listPeriods').click();
+                } else {
+                    alert('锁定失败：' + result.message);
+                }
+            } catch (error) {
+                alert('请求失败：' + error.message);
+            } finally {
+                button.disabled = false;
+                button.textContent = '锁定区间';
+            }
+        });
+
+        // 页面加载时初始化
+        document.getElementById('listPeriods').click();
     </script>
 </body>
 </html>

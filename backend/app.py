@@ -230,7 +230,7 @@ def run_backtest(request: BacktestRequest):
             "orders_full": backtest_result["orders"]
         })
 
-        return result
+        return {**result, "equity_curve": backtest_result["equity"]}
 
     except Exception as e:
         import traceback
@@ -249,6 +249,11 @@ def get_experiment(experiment_id: str):
 
     try:
         result = json.loads(result_path.read_text(encoding="utf-8"))
+        full_result_path = result_path.with_name("full_result.json")
+        if full_result_path.exists():
+            full_result = json.loads(full_result_path.read_text(encoding="utf-8"))
+            if "equity_curve_full" in full_result:
+                result["equity_curve"] = full_result["equity_curve_full"]
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"读取实验失败: {e}")

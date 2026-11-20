@@ -361,6 +361,27 @@ class TestAlpha:
 class TestReports:
     """报告生成测试。"""
 
+    def test_save_html_with_unavailable_sections(self, tmp_path):
+        from backend.reports import AnalysisReport
+
+        report = AnalysisReport({
+            "rank_ic_series": [
+                {"signal_date": "2024-02-29", "ic": -0.5, "p_value": 0.67, "sample_size": 3},
+            ],
+            "group_returns": None,
+            "exposure": None,
+            "alpha": None,
+        })
+        path = tmp_path / "factor_report.html"
+        report.save_html(path)
+
+        html = path.read_text(encoding="utf-8")
+        assert "2024-02-29" in html
+        assert "无分组数据" in html
+        assert "无行业数据" in html
+        assert "暂无 Alpha 分解数据" in html
+        assert "总超额收益" not in html
+
     def test_report_json_generation(self):
         """测试 JSON 报告生成。"""
         from backend.reports import AnalysisReport

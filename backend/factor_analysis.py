@@ -357,8 +357,296 @@ class FactorAnalyzer:
             "summary": {}
         }
 
-        equity = backtest_result.get("equity", [])
+        equity = backtest_result.get("equity_curve", backtest_result.get("equity", []))
         orders = backtest_result.get("orders", [])
+        trades = backtest_result.get("trades", [])
+
+        if not equity or not orders:
+            print(f"[因子分析] 数据不足：equity={len(equity)}, orders={len(orders)}")
+            return result
+
+        print(f"[因子分析] 开始分析：equity={len(equity)}, orders={len(orders)}, trades={len(trades)}")
+
+        # 1. 构建月末调仓日期列表和对应的订单数据
+        equity_df = pd.DataFrame(equity)
+        equity_df["date"] = pd.to_datetime(equity_df["date"])
+
+        # 从订单中获取所有月末信号日期
+        signal_dates = {}  # {signal_date: [orders]}
+        for order in orders:
+            sig_date = order.get("signal_date")
+            if sig_date:
+                if sig_date not in signal_dates:
+                    signal_dates[sig_date] = []
+                signal_dates[sig_date].append(order)
+
+        print(f"[因子分析] 找到 {len(signal_dates)} 个月末信号日期")
+
+        if not signal_dates:
+            return result
+
+        # 2. 对每个月末调仓日期计算 IC
+        sorted_signal_dates = sorted(signal_dates.keys())
+        for i, signal_date in enumerate(sorted_signal_dates):
+            # 获取该月末调仓的候选股票
+            month_orders = signal_dates[signal_date]
+            candidates_dict = {}  # {symbol: info}
+
+            for order in month_orders:
+                symbol = order.get("symbol")
+                if not symbol or symbol not in market_data:
+                    continue
+
+                quotes = market_data[symbol]
+                if quotes.empty:
+                    continue
+
+                signal_quotes = quotes[quotes["date"] <= signal_date]
+                if signal_quotes.empty:
+                    continue
+
+                last_row = signal_quotes.iloc[-1]
+                # 尝试从 quotes 中获取 market_cap，如果没有则从 close 估算
+                market_cap = last_row.get("market_cap")
+                if market_cap is None or market_cap == 0:
+                    market_cap = last_row.get("close", 10.0) * 1e8  # 简单估算
+
+                candidates_dict[symbol] = {
+                    "symbol": symbol,
+                    "market_cap": market_cap,
+                    "adv20": last_row.get("adv20", 20e6),
+                    "close": last_row.get("close", 10.0),
+                }
+
+            if not candidates_dict:
+                print(f"[因子分析] {signal_date}: 没有有效的候选股票")
+                continue
+
+            # 构建候选列表（按市值升序）
+            sorted_candidates = sorted(
+                candidates_dict.values(), key=lambda x: x["market_cap"]
+            )
+            candidates = [
+                StockCandidate(
+                    c["symbol"],
+                    c["market_cap"],
+                    c["adv20"],
+                    rank=j + 1,
+                    percentile=(j + 1) / len(sorted_candidates),
+                    close=c["close"],
+                )
+                for j, c in enumerate(sorted_candidates)
+            ]
+
+            # 获取后续持股期间的收益
+            if i < len(sorted_signal_dates) - 1:
+                next_signal_date = sorted_signal_dates[i + 1]
+                end_date = next_signal_date
+            else:
+                end_date = equity_df["date"].max().strftime("%Y-%m-%d")
+
+            # 计算持股期间各股票的收益
+            returns = {}
+            for symbol in candidates_dict.keys():
+                if symbol not in market_data:
+                    continue
+
+                quotes = market_data[symbol]
+                signal_quotes = quotes[quotes["date"] <= signal_date]
+                end_quotes = quotes[(quotes["date"] > signal_date) & (quotes["date"] <= end_date)]
+
+                if signal_quotes.empty or end_quotes.empty:
+                    continue
+
+                signal_price = signal_quotes.iloc[-1].get("close", 10.0)
+                end_price = end_quotes.iloc[-1].get("close", 10.0)
+
+                if signal_price > 0:
+                    period_return = (end_price - signal_price) / signal_price
+                    returns[symbol] = period_return
+
+            # 计算 IC
+            if len(returns) >= 3:
+                ic_result = self.compute_rank_ic(signal_date, candidates, returns)
+                result["rank_ic_series"].append({
+                    "signal_date": ic_result.signal_date,
+                    "ic": ic_result.ic,
+                    "p_value": ic_result.p_value,
+                    "sample_size": ic_result.sample_size,
+                })
+
+        print(f"[因子分析] 计算 IC 完成：{len(result['rank_ic_series'])} 个月末信号")
+
+        # 3. 计算整个回测期的五分组收益
+        all_candidates = []
+
+        for signal_date in sorted_signal_dates:
+            month_orders = signal_dates[signal_date]
+
+            for order in month_orders:
+                symbol = order.get("symbol")
+                if not symbol or symbol not in market_data:
+                    continue
+
+                quotes = market_data[symbol]
+                if quotes.empty:
+                    continue
+
+                signal_quotes = quotes[quotes["date"] <= signal_date]
+                if signal_quotes.empty:
+                    continue
+
+                market_cap = signal_quotes.iloc[-1].get("market_cap")
+                if market_cap is None or market_cap == 0:
+                    market_cap = signal_quotes.iloc[-1].get("close", 10.0) * 1e8
+
+                all_candidates.append({
+                    "symbol": symbol,
+                    "market_cap": market_cap,
+                    "adv20": signal_quotes.iloc[-1].get("adv20", 20e6),
+                    "close": signal_quotes.iloc[-1].get("close", 10.0),
+                })
+
+        if all_candidates:
+            # 按市值升序排列
+            sorted_all = sorted(all_candidates, key=lambda x: x["market_cap"])
+            candidate_objs = [
+                StockCandidate(
+                    c["symbol"],
+                    c["market_cap"],
+                    c["adv20"],
+                    rank=j + 1,
+                    percentile=(j + 1) / len(sorted_all),
+                    close=c["close"],
+                )
+                for j, c in enumerate(sorted_all)
+            ]
+
+            # 收集所有股票的收益
+            if sorted_signal_dates:
+                last_signal_date = sorted_signal_dates[-1]
+                last_returns = {}
+
+                for c in all_candidates:
+                    symbol = c["symbol"]
+                    if symbol not in market_data:
+                        continue
+
+                    quotes = market_data[symbol]
+                    signal_quotes = quotes[quotes["date"] <= last_signal_date]
+
+                    if signal_quotes.empty:
+                        continue
+
+                    signal_price = signal_quotes.iloc[-1].get("close", 10.0)
+                    end_quotes = quotes[quotes["date"] > last_signal_date]
+
+                    if end_quotes.empty or signal_price == 0:
+                        continue
+
+                    end_price = end_quotes.iloc[-1].get("close", 10.0)
+                    last_returns[symbol] = (end_price - signal_price) / signal_price
+
+                # 构建按分组的收益
+                returns_by_group = {}
+                if len(candidate_objs) >= 5:
+                    group_size = len(candidate_objs) // 5
+                    for group_id in range(1, 6):
+                        start_idx = (group_id - 1) * group_size
+                        end_idx = start_idx + group_size if group_id < 5 else len(candidate_objs)
+                        group_symbols = [c.symbol for c in candidate_objs[start_idx:end_idx]]
+                        group_returns = {s: last_returns.get(s, 0) for s in group_symbols}
+                        returns_by_group[group_id] = group_returns
+
+                if returns_by_group:
+                    group_result = self.compute_group_returns(candidate_objs, returns_by_group)
+                    result["group_returns"] = {
+                        "groups": {
+                            gid: {
+                                "group_id": gs.group_id,
+                                "avg_return": gs.avg_return,
+                                "cumulative_return": gs.cumulative_return,
+                                "symbols_count": gs.symbols_count,
+                                "avg_market_cap": gs.avg_market_cap,
+                            }
+                            for gid, gs in group_result.groups.items()
+                        },
+                        "monotonicity_check": group_result.monotonicity_check,
+                        "group1_excess_return": group_result.group1_excess_return,
+                    }
+
+        # 4. 计算策略 vs 基准的暴露
+        # 从 orders/trades 重建最后的持仓（equity_curve 中的 positions 只是数量，不是明细）
+        strategy_weights = {}
+        strategy_market_cap = {}
+        strategy_adv = {}
+
+        if trades and len(trades) > 0:
+            # 按股票代码统计买卖数量
+            position_shares = {}
+            for trade in trades:
+                symbol = trade.get("symbol")
+                side = trade.get("side")
+                shares = trade.get("shares", 0)
+
+                if symbol not in position_shares:
+                    position_shares[symbol] = 0
+
+                if side == "buy":
+                    position_shares[symbol] += shares
+                elif side == "sell":
+                    position_shares[symbol] -= shares
+
+            # 只保留有正持仓的股票
+            current_positions = {s: sh for s, sh in position_shares.items() if sh > 0}
+
+            if current_positions and equity and len(equity) > 0:
+                # 获取最后一个 equity_curve 数据中的总权益
+                last_equity_record = equity[-1]
+                total_equity = last_equity_record.get("equity", 1)
+
+                # 计算权重和暴露
+                for symbol, shares in current_positions.items():
+                    if symbol not in market_data:
+                        continue
+
+                    quotes = market_data[symbol]
+                    if quotes.empty:
+                        continue
+
+                    last_close = quotes.iloc[-1].get("close", 10.0)
+                    position_value = shares * last_close
+                    weight = position_value / total_equity if total_equity > 0 else 0
+
+                    strategy_weights[symbol] = weight
+                    strategy_market_cap[symbol] = quotes.iloc[-1].get("market_cap", last_close * 1e8)
+                    strategy_adv[symbol] = quotes.iloc[-1].get("adv20", 20e6)
+
+                # 基准权重：全市场等权
+                all_symbols_in_data = list(market_data.keys())
+                benchmark_weight = 1 / len(all_symbols_in_data) if all_symbols_in_data else 0
+                benchmark_weights = {s: benchmark_weight for s in all_symbols_in_data}
+
+                # 计算暴露
+                exposure_result = self.compute_exposure(
+                    strategy_weights,
+                    benchmark_weights,
+                    symbol_industry,
+                    strategy_market_cap,
+                    strategy_adv
+                )
+                result["exposure"] = {
+                    "strategy_industry_weights": exposure_result.strategy_industry_weights,
+                    "benchmark_industry_weights": exposure_result.benchmark_industry_weights,
+                    "industry_overweight": exposure_result.industry_overweight,
+                    "avg_market_cap": exposure_result.avg_market_cap,
+                    "benchmark_avg_market_cap": exposure_result.benchmark_avg_market_cap,
+                    "avg_adv": exposure_result.avg_adv,
+                    "benchmark_avg_adv": exposure_result.benchmark_avg_adv,
+                }
+
+        print(f"[因子分析] 完成。IC数={len(result['rank_ic_series'])}, 暴露={result['exposure'] is not None}")
+        return result
 
         if not equity or not orders:
             return result

@@ -42,9 +42,9 @@ class AnalysisReport:
 
         # 准备模板数据
         rank_ic_series = self.analysis_result.get("rank_ic_series", [])
-        group_returns = self.analysis_result.get("group_returns", {})
-        exposure = self.analysis_result.get("exposure", {})
-        alpha = self.analysis_result.get("alpha", {})
+        group_returns = self.analysis_result.get("group_returns") or {}
+        exposure = self.analysis_result.get("exposure") or {}
+        alpha = self.analysis_result.get("alpha") or {}
         summary = self.analysis_result.get("summary", {})
 
         # 计算 IC 统计
@@ -72,14 +72,17 @@ class AnalysisReport:
         template = Template(template_str)
         html = template.render(
             timestamp=self.timestamp,
-            avg_ic=f"{avg_ic:.4f}",
-            ic_std=f"{ic_std:.4f}",
-            ic_tstat=f"{ic_tstat:.4f}",
+            avg_ic=f"{avg_ic:.4f}" if ic_values else "—",
+            ic_std=f"{ic_std:.4f}" if len(ic_values) > 1 else "—",
+            ic_tstat=f"{ic_tstat:.4f}" if ic_std > 0 else "—",
             ic_count=len(rank_ic_series),
             ic_table=ic_table_html,
             groups_table=groups_table_html,
             industry_table=industry_table_html,
             alpha_table=alpha_table_html,
+            has_groups=bool(group_returns.get("groups")),
+            has_exposure=bool(exposure),
+            has_alpha=bool(alpha),
             group1_excess_return=f"{group_returns.get('group1_excess_return', 0):.4f}",
             monotonicity=group_returns.get("monotonicity_check", False),
             avg_market_cap=f"{exposure.get('avg_market_cap', 0):.0f}",
@@ -141,6 +144,9 @@ def _generate_ic_table(rank_ic_series: list) -> str:
 
 def _generate_groups_table(group_returns: dict) -> str:
     """生成分组收益表格。"""
+    if group_returns is None:
+        return "<p>无分组数据</p>"
+
     groups = group_returns.get("groups", {})
     if not groups:
         return "<p>无分组数据</p>"
@@ -176,6 +182,9 @@ def _generate_groups_table(group_returns: dict) -> str:
 
 def _generate_industry_table(exposure: dict) -> str:
     """生成行业权重对比表格。"""
+    if exposure is None:
+        return "<p>无行业权重数据</p>"
+
     strategy_ind = exposure.get("strategy_industry_weights", {})
     benchmark_ind = exposure.get("benchmark_industry_weights", {})
 
@@ -216,6 +225,9 @@ def _generate_industry_table(exposure: dict) -> str:
 
 def _generate_alpha_table(alpha: dict) -> str:
     """生成 Alpha 分解表格。"""
+    if not alpha:
+        return "<p>暂无 Alpha 分解数据</p>"
+
     return f"""
     <table border="1" cellpadding="5" cellspacing="0" style="width:100%">
         <tr style="background-color:#f2f2f2">
@@ -377,6 +389,7 @@ REPORT_TEMPLATE = """
 
         <!-- 五分组收益 -->
         <h2>五分组收益分析</h2>
+        {% if has_groups %}
         <div class="summary">
             <div class="summary-card">
                 <div class="label">第1组超额收益</div>
@@ -392,10 +405,12 @@ REPORT_TEMPLATE = """
         </div>
 
         <h3>各分组收益对比</h3>
+        {% endif %}
         {{ groups_table }}
 
         <!-- 因子暴露 -->
         <h2>因子暴露分析</h2>
+        {% if has_exposure %}
         <div class="summary">
             <div class="summary-card">
                 <div class="label">策略平均市值</div>
@@ -411,10 +426,12 @@ REPORT_TEMPLATE = """
         </div>
 
         <h3>行业权重对比</h3>
+        {% endif %}
         {{ industry_table }}
 
         <!-- 行业中性 Alpha -->
         <h2>行业中性 Alpha 分解</h2>
+        {% if has_alpha %}
         <div class="summary">
             <div class="summary-card">
                 <div class="label">总超额收益</div>
@@ -434,6 +451,7 @@ REPORT_TEMPLATE = """
         </div>
 
         <h3>Alpha 分解表</h3>
+        {% endif %}
         {{ alpha_table }}
 
         <div class="timestamp">
