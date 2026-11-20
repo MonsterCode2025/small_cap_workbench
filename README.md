@@ -2,7 +2,7 @@
 
 ## 项目概述
 
-这是一个基于**可验证、可迭代**理念的小市值量化策略研究系统，严格遵循[设计文档](../../../docs/superpowers/specs/2026-11-04-small-cap-iterative-strategy-design.md)中的研发方法。
+这是一个基于**可验证、可迭代**理念的小市值量化策略研究系统，严格遵循[设计文档](D:\lgl\code\quant\docs\superpowers\specs\2026-11-04-small-cap-iterative-strategy-design.md)中的研发方法。
 
 ### 核心特点
 
@@ -79,7 +79,9 @@ small_cap_workbench/
 | **选股模块** | `backend/selection.py` | ✅ 完成 | 小市值排序、过滤、权重分配 |
 | **账户模块** | `backend/portfolio.py` | ✅ 完成 | 多股票持仓、调仓、费用计算 |
 | **回测模块** | `backend/backtest.py` | ✅ 完成 | 历史模拟、集成调度 |
-| **API模块** | `backend/app.py` | ✅ 完成 | FastAPI服务、实验管理 |
+| **因子分析** | `backend/factor_analysis.py` | ✅ 完成 | Rank IC、分组收益、暴露、Alpha 分解 |
+| **报告生成** | `backend/reports.py` | ✅ 完成 | JSON 和 HTML 报告输出 |
+| **API模块** | `backend/app.py` | ✅ 完成 | FastAPI服务、实验管理、因子分析端点 |
 | **测试模块** | `tests/test_core.py` | ✅ 完成 | 单元测试覆盖 |
 
 **详细文档**：参见 [模块详解.md](docs/模块详解.md)
@@ -260,10 +262,11 @@ curl -X POST "http://127.0.0.1:8001/api/periods/lock?period_name=research_2020_2
 
 **目标**：理解规模信号特征
 
-- [ ] Rank IC时间序列
-- [ ] 五分组收益与单调性
-- [ ] 行业、波动、流动性暴露
-- [ ] 控制行业后的增量关系
+- [x] Rank IC时间序列
+- [x] 五分组收益与单调性
+- [x] 行业、波动、流动性暴露
+- [x] 控制行业后的增量关系
+- [x] API端点和报告生成
 
 ### 阶段四：增强迭代
 
@@ -403,16 +406,17 @@ assert filled_shares % 100 == 0
 ### ✅ 已完成
 
 - 核心模块实现（data, selection, portfolio, backtest）
-- 单元测试覆盖（选股、账户、费用）
-- API框架（FastAPI后端）
+- 单元测试覆盖（选股、账户、费用、因子分析）
+- API框架（FastAPI后端 + 因子分析端点）
 - 配置验证与参数检查
 - **数据审计模块**（验证数据完整性）
 - **区间管理模块**（管理研究/验证/封存区间）
 - **完整版数据加载**（支持全市场回测）
+- **因子分析模块** v1.1（Rank IC、分组收益、暴露、Alpha分解）
+- **报告生成** v1.1（JSON + HTML 报告）
 
 ### 🚧 进行中
 
-- 因子分析报告
 - 前端可视化增强
 
 ### 📋 待完成
